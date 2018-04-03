@@ -46,6 +46,14 @@ func addUser(usrname string, pwd string) int  {
 	return 1
 }
 
+//Delete a user account
+func deleteUser(username string) int  {
+	//TODO: for later stages, we'll have to add Locks here
+	debugPrint("Deleting User: " + username +"Account")
+	delete(userdata,username)
+	return 1
+}
+
 func getPassword(usrname string) (bool, string){ // returns users password
 
 	user, ok := userdata[usrname]

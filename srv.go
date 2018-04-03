@@ -5,24 +5,23 @@ import (
     "html/template"
     "log"
     "net/http"
-    "strings"
 )
 
-//handler to deal with only / requests. Default behaviour needs to be defined
-func sayhelloName(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Debug: Sayhello Handler")
-    r.ParseForm() //Parse url parameters passed, then parse the response packet for the POST body (request body)
-    // attention: If you do not call ParseForm method, the following data can not be obtained form
-    fmt.Println(r.Form) // print information on server side.
-    fmt.Println("path", r.URL.Path)
-    fmt.Println("scheme", r.URL.Scheme)
-    fmt.Println(r.Form["url_long"])
-    for k, v := range r.Form {
-        fmt.Println("key:", k)
-        fmt.Println("val:", strings.Join(v, ""))
-    }
-    fmt.Fprintf(w, "Hello astaxie!") // write data to response
-}
+////handler to deal with only / requests. Default behaviour needs to be defined
+//func sayhelloName(w http.ResponseWriter, r *http.Request) {
+//	fmt.Println("Debug: Sayhello Handler")
+//    r.ParseForm() //Parse url parameters passed, then parse the response packet for the POST body (request body)
+//    // attention: If you do not call ParseForm method, the following data can not be obtained form
+//    fmt.Println(r.Form) // print information on server side.
+//    fmt.Println("path", r.URL.Path)
+//    fmt.Println("scheme", r.URL.Scheme)
+//    fmt.Println(r.Form["url_long"])
+//    for k, v := range r.Form {
+//        fmt.Println("key:", k)
+//        fmt.Println("val:", strings.Join(v, ""))
+//    }
+//    fmt.Fprintf(w, "Hello astaxie!") // write data to response
+//}
 
 //Handler for login
 func login(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +68,7 @@ func registration(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		if debugon{ fmt.Println("Debug: username in post: ",r.Form["username"][0]) }
 		if debugon{ fmt.Println("Debug: password in post: ",r.Form["password_1"][0]) }
+		//TODO: Let's add a emtpy username and password check?
 		result := addUser(r.Form["username"][0],r.Form["password_1"][0])
 		if result==1 {													//succesfully added user go to login page
 			http.Redirect(w,r,"/login",http.StatusSeeOther)
@@ -82,19 +82,30 @@ func registration(w http.ResponseWriter, r *http.Request) {
 	}
 	}
 
-//handlr for home
+//Home Page handler
 func home(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Debug: home handler")
 	fmt.Println("method:", r.Method) //get request method
 	cookie, ok := r.Cookie("username")
 	fmt.Println(cookie)
 	fmt.Println(ok)
-	if(ok!=nil){						//cookie does not exist re-direct to login
+
+	//Cookie does not exist re-direct to login
+	if(ok!=nil){
 		http.Redirect(w,r,"/login",http.StatusSeeOther)
 		return
 	}
+
+	//Get User Data from Map
 	username := cookie.Value
-	user := userdata[username]//username of logged in user, key to userdata hashmap
+	user, isUserPresent := userdata[username]
+
+	//If map returns false, the account has been deleted. Redirect to registration.
+	if !isUserPresent {
+		http.Redirect(w,r,"/registration",http.StatusSeeOther)
+		return
+	}
+
 	if r.Method == "GET" {					//re-direct to homepage from login. Display Home
 		t, _ := template.ParseFiles("home.php")
 		t.Execute(w, nil)
@@ -153,6 +164,28 @@ func users(w http.ResponseWriter, r *http.Request) {
 
 }
 
+//Delete Account handler
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Debug: Invoked Delete Handler")
+	//get request method
+	fmt.Println("Method:", r.Method)
+
+	//Get cookie to identify the user
+	cookie, ok := r.Cookie("username")
+	if(ok!=nil){
+		//Cookie does not exist, re-direct to login
+		http.Redirect(w,r,"/login",http.StatusSeeOther)
+		return
+	}
+	username := cookie.Value
+	//Remove user from the user Map
+	deleteUser(username)
+
+	//Delete cookie and redirect to register
+	deleteCookie(w)
+	http.Redirect(w,r,"/registration",http.StatusSeeOther)
+}
+
 func follow(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Debug: follow handler")
 	fmt.Println("method:", r.Method) //get request method
@@ -170,18 +203,20 @@ func follow(w http.ResponseWriter, r *http.Request) {
 
 }
 
-
-
-//entry point.
 func main() {
-    http.HandleFunc("/", sayhelloName) // setting router rule
+
+	//All handler functions
+    http.HandleFunc("/", home)
     http.HandleFunc("/login", login)
 	http.HandleFunc("/registration", registration)
 	http.HandleFunc("/home", home)
 	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/users", users)
 	http.HandleFunc("/follow", follow)
-    err := http.ListenAndServe(":9090", nil) // setting listening port
+	http.HandleFunc("/deleteAccount", deleteHandler)
+
+    //Our server listens on this port
+    err := http.ListenAndServe(":9090", nil)
     if err != nil {
         log.Fatal("ListenAndServe: ", err)
     }

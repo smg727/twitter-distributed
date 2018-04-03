@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Registration system PHP and MySQL</title>
+  <title>Registration</title>
 </head>
 <body>
   <div>
-  	<h2>Register</h2>
+  	<h2>Register</h2></br>
+  	Looks like you don't have an account, let's quickly create one!</br>
   </div>
 	
   <form method="post" action="registration">
