@@ -5,23 +5,24 @@ import (
     "html/template"
     "log"
     "net/http"
+	"strings"
 )
 
-////handler to deal with only / requests. Default behaviour needs to be defined
-//func sayhelloName(w http.ResponseWriter, r *http.Request) {
-//	fmt.Println("Debug: Sayhello Handler")
-//    r.ParseForm() //Parse url parameters passed, then parse the response packet for the POST body (request body)
-//    // attention: If you do not call ParseForm method, the following data can not be obtained form
-//    fmt.Println(r.Form) // print information on server side.
-//    fmt.Println("path", r.URL.Path)
-//    fmt.Println("scheme", r.URL.Scheme)
-//    fmt.Println(r.Form["url_long"])
-//    for k, v := range r.Form {
-//        fmt.Println("key:", k)
-//        fmt.Println("val:", strings.Join(v, ""))
-//    }
-//    fmt.Fprintf(w, "Hello astaxie!") // write data to response
-//}
+//handler to deal with only / requests. Default behaviour needs to be defined
+func sayhelloName(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Debug: Sayhello Handler")
+   r.ParseForm() //Parse url parameters passed, then parse the response packet for the POST body (request body)
+   // attention: If you do not call ParseForm method, the following data can not be obtained form
+   fmt.Println(r.Form) // print information on server side.
+   fmt.Println("path", r.URL.Path)
+   fmt.Println("scheme", r.URL.Scheme)
+   fmt.Println(r.Form["url_long"])
+   for k, v := range r.Form {
+       fmt.Println("key:", k)
+       fmt.Println("val:", strings.Join(v, ""))
+   }
+   fmt.Fprintf(w, "Hello astaxie!") // write data to response
+}
 
 //Handler for login
 func login(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +125,18 @@ func home(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w,disptweet.text)
 		fmt.Fprint(w,"<br />")
 	}
-	//fmt.Fprint(w,user.tweets)
+	fmt.Fprint(w,"<br /><br />")
+	fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
+	for friend, _ := range user.follows {
+		fuser, present := userdata[friend]
+		if present {
+			fmt.Fprint(w, "<br/>"+fuser.username+":"+"<br/>")
+			for _, dispftweet := range fuser.tweets {
+				fmt.Fprint(w, dispftweet.text)
+				fmt.Fprint(w, "<br />")
+			}
+		}
+	}
 
 
 }
@@ -147,8 +159,14 @@ func users(w http.ResponseWriter, r *http.Request) {
 	}
 	username := cookie.Value
 	user := userdata[username]
-	t, _ := template.ParseFiles("home.php")
+	t, _ := template.ParseFiles("Home.php")
 	t.Execute(w, nil)
+	tofollow := r.URL.Query().Get("tofollow")
+	fmt.Println("tofollow"+tofollow)
+	if tofollow!=""{
+		user.follows[tofollow]=true
+		fmt.Println("Added"+tofollow)
+	}
 	fmt.Fprint(w, "<h>Folow some Users to see their tweets<h><br/>")
 	for k,_ := range userdata{
 		_, ok := user.follows[k]
@@ -156,12 +174,11 @@ func users(w http.ResponseWriter, r *http.Request) {
 		if(ok==false && k!=user.username){
 			//user is not already following the person. Checking if the user1 from userdata exists in current users follows
 			//fmt.Fprint(w, k)
-			fmt.Fprintf(w,"%s <a href=follow?tofollow=%s>Follow</a>",k,k)
+			fmt.Fprintf(w,"%s <a href=users?tofollow=%s>Follow</a>",k,k)
 			fmt.Fprint(w,"</br>")
 		}
 
 	}
-
 }
 
 //Delete Account handler
@@ -186,34 +203,21 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w,r,"/registration",http.StatusSeeOther)
 }
 
-func follow(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Debug: follow handler")
-	fmt.Println("method:", r.Method) //get request method
-	/*cookie, ok := r.Cookie("username")
-	if(ok!=nil){						//cookie does not exist re-direct to login
-		http.Redirect(w,r,"/login",http.StatusSeeOther)
-		return
-	}
-	username := cookie.Value
-	user := userdata[username]*/
-	tofollow := r.URL.Query().Get("tofollow")
-	fmt.Fprint(w,tofollow)
-	//user.follows[tofollow]=true
-	//http.Redirect(w,r,"/users",http.StatusSeeOther)
-
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	return
 }
 
 func main() {
 
 	//All handler functions
-    http.HandleFunc("/", home)
+    http.HandleFunc("/", sayhelloName)    //Keeping this for now to enable log analyzing in console. Lets change this later
     http.HandleFunc("/login", login)
 	http.HandleFunc("/registration", registration)
 	http.HandleFunc("/home", home)
 	http.HandleFunc("/logout", logout)
 	http.HandleFunc("/users", users)
-	http.HandleFunc("/follow", follow)
 	http.HandleFunc("/deleteAccount", deleteHandler)
+	http.HandleFunc("/favicon.ico", faviconHandler)
 
     //Our server listens on this port
     err := http.ListenAndServe(":9090", nil)

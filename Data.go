@@ -41,6 +41,7 @@ func addUser(usrname string, pwd string) int  {
 		return 0
 	}
 	usr := User{username:usrname,password:pwd}
+	usr.follows = make(map[string]bool)
 	userdata[usrname] = usr
 	debugPrint("Debug: User added")
 	return 1
