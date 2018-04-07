@@ -22,15 +22,11 @@ type tweet struct {
 
 var debugon = true //if set to true debug outputs are printed
 
-//function to print debug outputs if debugon=true
+//Function to print debug outputs if debugon=true
 func debugPrint(text string){
 	if(debugon){
 		fmt.Println(text)
 	}
-}
-
-func printer(){ //test function to call one function from another goclass. Remove at end
-	debugPrint("Debug: function test")
 }
 
 //function to add user to data on registration
@@ -55,7 +51,8 @@ func deleteUser(username string) int  {
 	return 1
 }
 
-func getPassword(usrname string) (bool, string){ // returns users password
+//Returns users password
+func getPassword(usrname string) (bool, string){
 
 	user, ok := userdata[usrname]
 	if(!ok){
