@@ -88,7 +88,7 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Println("Debug: Empty Username or Password value")
 			}
 			//TODO: Remove Alert?
-			fmt.Fprintln(w, "<script>alert(\"Please enter a valid Username and Password\")</script>")
+			//fmt.Fprintln(w, "<script>alert(\"Please enter a valid Username and Password\")</script>")
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
@@ -105,7 +105,7 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Println("Debug: User already exists")
 			}
 			//TODO: Remove Alert?
-			fmt.Fprintln(w, "<script>alert(\"User already exists\")</script>")
+			//fmt.Fprintln(w, "<script>alert(\"User already exists\")</script>")
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
@@ -152,13 +152,21 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Display all the tweets
-	fmt.Fprint(w, "<h>Here are your tweets, "+user.username+":<h><br />")
+	if len(user.tweets) != 0 {
+		fmt.Fprint(w, "<h>Here are your tweets, "+user.username+":<h><br />")
+	}else{
+		fmt.Fprint(w, "<h>What's on your mind? Make a tweet ! <h><br />")
+	}
 	for _, dispTweet := range user.tweets {
 		fmt.Fprint(w, dispTweet.text)
 		fmt.Fprint(w, "<br />")
 	}
 	fmt.Fprint(w, "<br /><br />")
-	fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
+	if len(user.follows)!=0 {
+		fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
+	}else{
+		fmt.Fprint(w, "<h>Go right ahead, Discover some users to follow<h><br />")
+	}
 	for friend, _ := range user.follows {
 		fuser, present := userdata[friend]
 		if present {
