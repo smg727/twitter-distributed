@@ -83,7 +83,46 @@ func (s *server) Login(ctx context.Context, in *pb.Credentials) (*pb.LoginReply,
 	if(in.Pwd==user.password){
 		return &pb.LoginReply{Status:true}, nil
 	}else {
-		return &pb.LoginReply{Status:false}, errors.New("Wrong Password")
+		return &pb.LoginReply{Status:false}, errors.New("Wrong password")
+	}
+}
+
+func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddTweetReply, error){
+	user, ok := userdata[in.Username]
+	if(!ok){
+		debugPrint("No such user")
+		return &pb.AddTweetReply{Status:false}, errors.New("No such User")
+	}
+	newTweet := tweet{text: in.TweetText}
+	user.tweets = append(user.tweets, newTweet)
+	userdata[in.Username] = user
+	return &pb.AddTweetReply{Status:true},nil
+}
+
+func (s *server) OwnTweets(ctx context.Context, in *pb.OwnTweetsRequest) (*pb.OwnTweetsReply, error){
+	user, ok := userdata[in.Username]
+	if(!ok){
+		debugPrint("No such user")
+		return nil, errors.New("No such User")
+	}
+	response := pb.OwnTweetsReply{}
+	for _,i := range user.tweets{
+		tweetToAdd := pb.Tweet{Text:i.text}
+		response.TweetList = append(response.TweetList, &tweetToAdd)
+	}
+	debugPrint("your tweets")
+	fmt.Println(response)
+	return &response,nil
+}
+
+func (s *server) UserExists(ctx context.Context, in *pb.UserExistsRequest) (*pb.UserExistsReply, error) {
+	username:=in.Username
+	_, ok := userdata[username]
+	if(!ok) {
+		debugPrint("No such user")
+		return &pb.UserExistsReply{Status: false}, errors.New("No such user exists")
+	}else{
+		return &pb.UserExistsReply{Status:true}, nil
 	}
 }
 

@@ -13,6 +13,9 @@ service Greeter {
   rpc SayHelloAgain (HelloRequest) returns (HelloReply) {}
   rpc Register (Credentials) returns (RegisterReply) {}
   rpc Login (Credentials) returns (LoginReply) {}
+  rpc UserExists (UserExistsRequest) returns (UserExistsReply) {}
+  rpc AddTweet (AddTweetRequest) returns (AddTweetReply) {}
+  rpc OwnTweets (OwnTweetsRequest) returns (OwnTweetsReply) {}
 }
 
 // The request message containing the user's name.
@@ -36,4 +39,33 @@ message RegisterReply {
 
 message LoginReply {
     bool status = 1;
+}
+
+message UserExistsReply {
+    bool status = 1;
+}
+
+message UserExistsRequest {
+    string username = 1;
+}
+
+message AddTweetRequest {
+    string username = 1;
+    string tweet_text = 2;
+}
+
+message AddTweetReply {
+    bool status = 1;
+}
+
+message Tweet {
+    string text = 1;
+}
+
+message OwnTweetsReply {
+    repeated Tweet tweetList = 1;
+}
+
+message OwnTweetsRequest {
+    string username = 1 ;
 }

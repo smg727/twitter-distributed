@@ -62,7 +62,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname:usr, Pwd:pwd})
 		//User does not exist - send to registration page
 		if(err!=nil){
-			fmt.Println("Debug: Login rpc failed",err)
+			fmt.Println("Debug: Login rpc failed",err.Error())
 			if(err.Error()=="Wrong Password"){
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
@@ -148,7 +148,8 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	//Get User Data from Map
 	username := cookie.Value
-	user, isUserPresent := userdata[username]
+	isUserPresent := userExists(username)
+
 
 	//If map returns false, the account has been deleted. Redirect to registration.
 	if !isUserPresent {
@@ -163,24 +164,23 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		//Post: submission of new tweet. Save the tweet and then display Home.
 		r.ParseForm()
-		newTweet := tweet{text: r.Form["tweet"][0]}
-		user.tweets = append(user.tweets, newTweet)
-		userdata[username] = user
+		addTweet(username,r.Form["tweet"][0])
 		t, _ := template.ParseFiles("home.html")
 		t.Execute(w, nil)
-		fmt.Println(user.tweets)
+
 	}
 
 	//Display all the tweets
-	if len(user.tweets) != 0 {
-		fmt.Fprint(w, "<h>Here are your tweets, "+user.username+":<h><br />")
+	tweets := getMyTweets(username).TweetList
+	if len(tweets) != 0 {
+		fmt.Fprint(w, "<h>Here are your tweets, "+username+":<h><br />")
 	}else{
 		fmt.Fprint(w, "<h>What's on your mind? Make a tweet ! <h><br />")
 	}
-	for _, dispTweet := range user.tweets {
-		fmt.Fprint(w, dispTweet.text)
+	for _, dispTweet := range tweets {
+		fmt.Fprint(w, dispTweet.Text)
 		fmt.Fprint(w, "<br />")
-	}
+	}/*
 	fmt.Fprint(w, "<br /><br />")
 	if len(user.follows)!=0 {
 		fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
@@ -196,7 +196,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(w, "<br />")
 			}
 		}
-	}
+	}*/
 }
 
 //Logout handler

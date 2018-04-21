@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-
+	"golang.org/x/net/context"
+	pb "twitter-distributed/utils/ProtoDef"
 	"net/http"
+	"time"
 )
 
 
@@ -29,6 +31,37 @@ func debugPrint(text string){
 	}
 }
 
+func userExists(uname string) bool{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.UserExists(ctx, &pb.UserExistsRequest{Username:uname})
+	if(err==nil) {
+		return reply.Status
+	}
+	fmt.Println("Debug: userExists rpc returned false",err)
+	return false
+}
+
+func addTweet(username string, tweettext string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := rpcCaller.AddTweet(ctx, &pb.AddTweetRequest{Username:username, TweetText:tweettext})
+	if(err!=nil){
+		fmt.Println("Debug: tweet addition failed",err)
+	}
+
+}
+
+func getMyTweets(username string) *pb.OwnTweetsReply  {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.OwnTweets(ctx, &pb.OwnTweetsRequest{Username:username})
+	if(err!=nil){
+		fmt.Println(err)
+		return nil
+	}
+	return reply
+}
 //function to add user to data on registration
 func addUser(usrname string, pwd string) int  {
 	_, ok := userdata[usrname]
