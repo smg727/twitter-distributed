@@ -6,7 +6,20 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"os"
+	"time"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	pb "twitter-distributed/utils/ProtoDef"
 )
+
+const (
+	address     = "localhost:50051"
+	defaultName = "world"
+)
+
+var rpcCaller pb.GreeterClient
+
 
 //Handler to deal with only / requests.
 func sayhelloName(w http.ResponseWriter, r *http.Request) {
@@ -42,25 +55,31 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("password:", r.Form["password"])
 		usr := r.Form["username"][0]
 		pwd := r.Form["password"][0]
-		ok, actualPassword := getPassword(usr)
-
+		//ok, actualPassword := getPassword(usr)
+		//calling rpc to validate user
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname:usr, Pwd:pwd})
 		//User does not exist - send to registration page
-		if !ok {
-			http.Redirect(w, r, "/registration", http.StatusSeeOther)
-			return
-		}
+		if(err!=nil){
+			fmt.Println("Debug: Login rpc failed",err)
+			if(err.Error()=="Wrong Password"){
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			}else {
+				http.Redirect(w, r, "/registration", http.StatusSeeOther)
+				return
+			}
 
-		if pwd == actualPassword {
-			//Login successful, set cookie and goto home
+		}else if(err==nil&&reply.Status==true){
+			debugPrint("debug: user successufully logged in")
 			expiration := 3600
 			cookie := http.Cookie{Name: "username", Value: usr, MaxAge: expiration}
 			http.SetCookie(w, &cookie)
 			http.Redirect(w, r, "/home", http.StatusSeeOther)
 			return
-		} else {
-			//Login unsuccessful go back to login page
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
+		}else {
+			log.Println("Major issue")
 		}
 	}
 }
@@ -93,22 +112,22 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		//Adding username and password to the Map
-		result := addUser(r.Form["username"][0], r.Form["password_1"][0])
-		if result == 1 {
-			//Successfully added user to the map, redirect to login page
+		//calling rpc to add user
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname:r.Form["username"][0],Pwd:r.Form["password_1"][0]})
+		if(err==nil){
+			fmt.Println("User added using rpc",reply)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
-		} else {
-			//User already exists send back to registration page
-			if debugon {
-				fmt.Println("Debug: User already exists")
-			}
-			//TODO: Remove Alert?
-			//fmt.Fprintln(w, "<script>alert(\"User already exists\")</script>")
+		}else{
+			fmt.Println("Rpc failed",reply,err)
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
+
+		//Adding username and password to the Map
+
 	}
 }
 
@@ -122,6 +141,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	//Cookie does not exist re-direct to login
 	if (ok != nil) {
+		fmt.Println("Debug: Cookie doesnt exist. re-direct to login")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -250,6 +270,29 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
+
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+	//c := pb.NewGreeterClient(conn)
+	rpcCaller = pb.NewGreeterClient(conn)
+
+	// Contact the server and print out its response. TO test if RPC is working
+	name := defaultName
+	if len(os.Args) > 1 {
+		name = os.Args[1]
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	r, err := rpcCaller.SayHello(ctx, &pb.HelloRequest{Name: name})
+	if err != nil {
+		log.Fatalf("could not greet: %v", err)
+	}
+	log.Printf("RPC is working %s", r.Message)
+	//end of test RPC
+
 	//All handler functions
 	http.HandleFunc("/", sayhelloName) //Keeping this for now to enable log analyzing in console. Lets change this later
 	http.HandleFunc("/login", loginHandler)
@@ -261,8 +304,8 @@ func main() {
 	http.HandleFunc("/favicon.ico", faviconHandler)
 
 	//Our server listens on this port
-	err := http.ListenAndServe(":9090", nil)
-	if err != nil {
+	errls := http.ListenAndServe(":9090", nil)
+	if errls != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
 }
