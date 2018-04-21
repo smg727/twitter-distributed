@@ -126,6 +126,25 @@ func (s *server) UserExists(ctx context.Context, in *pb.UserExistsRequest) (*pb.
 	}
 }
 
+func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.DeleteReply, error){
+
+	//TODO: for later stages, we might have to add Locks here
+	debugPrint("Deleting User: " + in.Uname +"Account")
+	delete(userdata,in.Uname)
+	return &pb.DeleteReply{DeleteStatus:false}, errors.New("User deleted")
+
+	//user, ok := userdata[in.Uname]
+	//if(!ok){
+	//	debugPrint("No such user")
+	//	return &pb.LoginReply{Status:false}, errors.New("No such User")
+	//}
+	//if(in.Pwd==user.password){
+	//	return &pb.LoginReply{Status:true}, nil
+	//}else {
+	//	return &pb.LoginReply{Status:false}, errors.New("Wrong Password")
+	//}
+}
+
 func main() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {

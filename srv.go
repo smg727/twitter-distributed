@@ -257,7 +257,20 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	username := cookie.Value
 	//Remove user from the user Map
-	deleteUser(username)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname:username})
+	if err==nil {
+		fmt.Println("User Deleted rpc",reply)
+		http.Redirect(w, r, "/registration", http.StatusSeeOther)
+		return
+	}else{
+		fmt.Println("Rpc failed",reply,err)
+		http.Redirect(w, r, "/registration", http.StatusSeeOther)
+		return
+	}
+	//deleteUser(username)
 
 	//Delete cookie and redirect to register
 	deleteCookie(w)
