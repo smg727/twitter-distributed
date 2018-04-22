@@ -168,7 +168,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	//Display all the tweets
+	//Display self tweets
 	tweets := getMyTweets(username).TweetList
 	if len(tweets) != 0 {
 		fmt.Fprint(w, "<h>Here are your tweets, "+username+":<h><br />")
@@ -178,23 +178,38 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	for _, dispTweet := range tweets {
 		fmt.Fprint(w, dispTweet.Text)
 		fmt.Fprint(w, "<br />")
-	} /*
-	fmt.Fprint(w, "<br /><br />")
-	if len(user.follows)!=0 {
-		fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
-	}else{
-		fmt.Fprint(w, "<h>Go right ahead, Discover some users to follow<h><br />")
 	}
-	for friend, _ := range user.follows {
-		fuser, present := userdata[friend]
-		if present {
-			fmt.Fprint(w, "<br/>"+fuser.username+":"+"<br/>")
-			for _, dispftweet := range fuser.tweets {
-				fmt.Fprint(w, dispftweet.text)
+
+	// Initiate RPC call to get all the friends tweets
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.GetFriendsTweets(ctx, &pb.GetFriendsTweetsRequest{Username: username})
+	if err == nil {
+		fmt.Println("Successful GetFriendsTweets RPC")
+		allFriendsTweets := reply.FriendsTweets
+		fmt.Fprint(w, "<br /><br />")
+		if len(allFriendsTweets) != 0 {
+			fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
+		} else {
+			fmt.Fprint(w, "<h>Go right ahead, Discover some users to follow<h><br />")
+		}
+
+		for _, eachUser := range allFriendsTweets {
+			//Print Friend's name
+			fmt.Fprint(w, "<br/>"+eachUser.Username.Username+":"+"<br/>")
+			for _, eachTweet := range eachUser.Tweets {
+				//Print Friend's all the tweets
+				fmt.Fprint(w, eachTweet.Text)
 				fmt.Fprint(w, "<br />")
 			}
 		}
-	}*/
+		return
+	} else {
+		fmt.Println("GetFriendsTweets RPC failed", reply, err)
+		http.Redirect(w, r, "/home", http.StatusSeeOther)
+		return
+	}
+
 }
 
 //Logout handler

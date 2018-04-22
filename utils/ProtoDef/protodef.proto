@@ -19,6 +19,7 @@ service Greeter {
   rpc DeleteUser (Credentials) returns (DeleteReply) {}
   rpc UsersToFollow (UsersToFollowRequest) returns (UsersToFollowResponse) {}
   rpc FollowUser (FollowUserRequest) returns (FollowUserResponse) {}
+  rpc GetFriendsTweets (GetFriendsTweetsRequest) returns (GetFriendsTweetsResponse) {}
 }
 
 // The request message containing the user's name.
@@ -96,4 +97,17 @@ message FollowUserRequest {
 
 message FollowUserResponse {
     bool followStatus = 1;
+}
+
+message GetFriendsTweetsRequest{
+    string username = 1;
+}
+
+message UsersAllTweets {
+    User username = 1;
+    repeated Tweet tweets = 2;
+}
+
+message GetFriendsTweetsResponse {
+    repeated UsersAllTweets friendsTweets = 1;
 }

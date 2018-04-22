@@ -165,6 +165,32 @@ func (s *server) UsersToFollow(ctx context.Context, in *pb.UsersToFollowRequest)
 	}
 }
 
+func (s *server) GetFriendsTweets(ctx context.Context, in *pb.GetFriendsTweetsRequest) (*pb.GetFriendsTweetsResponse, error) {
+	response := &pb.GetFriendsTweetsResponse{}
+
+	//Get the user from our Map
+	user, isUserPresent := userdata[in.Username]
+	if isUserPresent {
+		for eachFollowedUser := range user.follows {
+			//Iterate through all the Followed Users
+			eachFollowedUserData := userdata[eachFollowedUser]
+			userAllTweets := &pb.UsersAllTweets{}
+			userAllTweets.Username = &pb.User{Username: eachFollowedUser}
+			println(eachFollowedUser)
+			//Append all the tweets ap per the User
+			for _, eachUserTweet := range eachFollowedUserData.tweets {
+				println(eachUserTweet.text)
+				userAllTweets.Tweets = append(userAllTweets.Tweets, &pb.Tweet{Text: eachUserTweet.text})
+			}
+			//Append all of current Followed users data into the response
+			response.FriendsTweets = append(response.FriendsTweets, userAllTweets)
+		}
+	}
+
+	println(response.FriendsTweets)
+	return response, nil
+}
+
 func main() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
