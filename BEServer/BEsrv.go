@@ -136,10 +136,19 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 
 }
 
+func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.FollowUserResponse, error) {
+	debugPrint("User: " + in.SelfUsername + " has requested to follow: " + in.ToFollowUsername)
+	//Getting user from user data map and adding the new user to be followed
+	user := userdata[in.SelfUsername]
+	user.follows[in.ToFollowUsername] = true
+	return &pb.FollowUserResponse{FollowStatus: true}, nil
+
+}
+
 func (s *server) UsersToFollow(ctx context.Context, in *pb.UsersToFollowRequest) (*pb.UsersToFollowResponse, error) {
 	response := &pb.UsersToFollowResponse{}
 	//Get the user from our Map
-	user , isUserPresent := userdata[in.Username]
+	user, isUserPresent := userdata[in.Username]
 	//fmt.Println("Self Username: ", user.username)
 	if isUserPresent {
 		for eachUser := range userdata {

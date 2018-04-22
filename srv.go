@@ -217,17 +217,27 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := cookie.Value
-	//user := userdata[username]
 	t, _ := template.ParseFiles("Home.html")
 	t.Execute(w, nil)
-	tofollow := r.URL.Query().Get("tofollow")
-	fmt.Println("tofollow" + tofollow)
-	//if tofollow != "" {
-	//	user.follows[tofollow] = true
-	//	fmt.Println("Added" + tofollow)
-	//}
+	toFollow := r.URL.Query().Get("tofollow")
+	//fmt.Println("tofollow" + toFollow)
 
-	fmt.Fprint(w, "<h>Folow some Users to see their tweets<h><br/>")
+	if toFollow != "" {
+		//TODO: Discuss if we shall move this RPC call and the below one to a separate function in Data.go
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.FollowUser(ctx, &pb.FollowUserRequest{SelfUsername: username, ToFollowUsername: toFollow})
+		if err == nil {
+			fmt.Println("User " + username + " successfully followed user " + toFollow)
+		} else {
+			fmt.Println("FollowUser RPC failed", reply, err)
+			http.Redirect(w, r, "/users", http.StatusSeeOther)
+			return
+		}
+
+	}
+
+	fmt.Fprint(w, "<h>Follow some Users to see their Tweets<h><br/>")
 
 	//RPC Call to get all the users to follow
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

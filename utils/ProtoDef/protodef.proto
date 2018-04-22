@@ -18,6 +18,7 @@ service Greeter {
   rpc OwnTweets (OwnTweetsRequest) returns (OwnTweetsReply) {}
   rpc DeleteUser (Credentials) returns (DeleteReply) {}
   rpc UsersToFollow (UsersToFollowRequest) returns (UsersToFollowResponse) {}
+  rpc FollowUser (FollowUserRequest) returns (FollowUserResponse) {}
 }
 
 // The request message containing the user's name.
@@ -86,4 +87,13 @@ message UsersToFollowRequest {
 
 message UsersToFollowResponse {
     repeated User usersToFollowList = 1;
+}
+
+message FollowUserRequest {
+    string selfUsername = 1;
+    string toFollowUsername = 2;
+}
+
+message FollowUserResponse {
+    bool followStatus = 1;
 }
