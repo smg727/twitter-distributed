@@ -176,8 +176,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "<h>What's on your mind? Make a tweet ! <h><br />")
 	}
 	for _, dispTweet := range tweets {
+		fmt.Fprint(w, "<p>")
 		fmt.Fprint(w, dispTweet.Text)
-		fmt.Fprint(w, "<br />")
+		fmt.Fprint(w, "</p>")
 	}
 
 	// Initiate RPC call to get all the friends tweets
@@ -199,8 +200,9 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, "<br/>"+eachUser.Username.Username+":"+"<br/>")
 			for _, eachTweet := range eachUser.Tweets {
 				//Print Friend's all the tweets
+				fmt.Fprint(w, "<p>")
 				fmt.Fprint(w, eachTweet.Text)
-				fmt.Fprint(w, "<br />")
+				fmt.Fprint(w, "</p>")
 			}
 		}
 		return
@@ -231,11 +233,21 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+
+	//Get User Data from Map
 	username := cookie.Value
+	isUserPresent := userExists(username)
+
+	//If map returns false, the account has been deleted. Redirect to registration.
+	if !isUserPresent {
+		http.Redirect(w, r, "/registration", http.StatusSeeOther)
+		return
+	}
+
 	t, _ := template.ParseFiles("Home.html")
 	t.Execute(w, nil)
 	toFollow := r.URL.Query().Get("tofollow")
-	//fmt.Println("tofollow" + toFollow)
+	fmt.Println("tofollow" + toFollow)
 
 	if toFollow != "" {
 		//TODO: Discuss if we shall move this RPC call and the below one to a separate function in Data.go
@@ -330,7 +342,7 @@ func main() {
 	defer cancel()
 	r, err := rpcCaller.SayHello(ctx, &pb.HelloRequest{Name: name})
 	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+		log.Fatalf("Please bring up the Back-End Server first. Could not greet: %v", err)
 	}
 	log.Printf("RPC is working %s", r.Message)
 	//end of test RPC

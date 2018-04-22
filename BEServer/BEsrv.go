@@ -139,7 +139,15 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.FollowUserResponse, error) {
 	debugPrint("User: " + in.SelfUsername + " has requested to follow: " + in.ToFollowUsername)
 	//Getting user from user data map and adding the new user to be followed
-	user := userdata[in.SelfUsername]
+	user, ok := userdata[in.SelfUsername]
+	if !ok {
+		return &pb.FollowUserResponse{FollowStatus:false},errors.New("Debug: Selfuser does not exist")
+	}
+	_, ok2 :=userdata[in.ToFollowUsername]
+	if !ok2{
+		return &pb.FollowUserResponse{FollowStatus:false},errors.New("Debug: ToFollow user does not exist")
+	}
+	fmt.Println("value of ok2",ok2,in.ToFollowUsername)
 	user.follows[in.ToFollowUsername] = true
 	return &pb.FollowUserResponse{FollowStatus: true}, nil
 
