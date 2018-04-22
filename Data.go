@@ -35,7 +35,7 @@ func userExists(uname string) bool{
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	reply, err := rpcCaller.UserExists(ctx, &pb.UserExistsRequest{Username:uname})
-	if(err==nil) {
+	if err==nil {
 		return reply.Status
 	}
 	fmt.Println("Debug: userExists rpc returned false",err)
@@ -56,7 +56,7 @@ func getMyTweets(username string) *pb.OwnTweetsReply  {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	reply, err := rpcCaller.OwnTweets(ctx, &pb.OwnTweetsRequest{Username:username})
-	if(err!=nil){
+	if err!=nil {
 		fmt.Println(err)
 		return nil
 	}
@@ -78,10 +78,17 @@ func addUser(usrname string, pwd string) int  {
 
 //Delete a user account
 func deleteUser(username string) int  {
-	//TODO: for later stages, we'll have to add Locks here
-	debugPrint("Deleting User: " + username +"Account")
-	delete(userdata,username)
-	return 1
+	//TODO: for later stages, we might have to add Locks here
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname:username})
+	if err == nil {
+		fmt.Println("Delete User RPC successful",reply)
+		return 0
+	}else{
+		fmt.Println("Delete User RPC failed",reply,err)
+		return -1
+	}
 }
 
 //Returns users password

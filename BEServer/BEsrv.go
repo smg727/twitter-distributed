@@ -18,6 +18,7 @@ const (
 
 // server is used to implement helloworld.GreeterServer.
 type server struct{}
+
 // SayHello implements helloworld.GreeterServer
 
 //userdata
@@ -26,21 +27,22 @@ var userdata = make(map[string]User)
 type User struct {
 	username string
 	password string
-	tweets []tweet
-	follows map[string]bool
+	tweets   []tweet
+	follows  map[string]bool
 }
 
 type tweet struct {
 	text string
 }
+
 //userdataend
 
 //debugfuntion
 var debugon = true //if set to true debug outputs are printed
 
 //Function to print debug outputs if debugon=true
-func debugPrint(text string){
-	if(debugon){
+func debugPrint(text string) {
+	if (debugon) {
 		fmt.Println(text)
 	}
 }
@@ -55,94 +57,103 @@ func (s *server) SayHelloAgain(ctx context.Context, in *pb.HelloRequest) (*pb.He
 	return &pb.HelloReply{Message: "Hello again friend " + in.Name}, nil
 }
 
-
 //registeruser function
-func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.RegisterReply, error){
+func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.RegisterReply, error) {
 
-	usrname:=in.Uname
-	pwd:=in.Pwd
+	usrname := in.Uname
+	pwd := in.Pwd
 
 	_, ok := userdata[usrname]
-	if(ok){
+	if (ok) {
 		debugPrint("Debug: User already exists")
-		return &pb.RegisterReply{Message:"User already exists"},errors.New("user already exists")
+		return &pb.RegisterReply{Message: "User already exists"}, errors.New("user already exists")
 	}
-	usr := User{username:usrname,password:pwd}
+	usr := User{username: usrname, password: pwd}
 	usr.follows = make(map[string]bool)
 	userdata[usrname] = usr
 	debugPrint("Debug: User added")
-	return &pb.RegisterReply{Message:"User succesfully added"},nil
-	}
+	return &pb.RegisterReply{Message: "User succesfully added"}, nil
+}
 
-func (s *server) Login(ctx context.Context, in *pb.Credentials) (*pb.LoginReply, error){
+func (s *server) Login(ctx context.Context, in *pb.Credentials) (*pb.LoginReply, error) {
 	user, ok := userdata[in.Uname]
-	if(!ok){
+	if (!ok) {
 		debugPrint("No such user")
-		return &pb.LoginReply{Status:false}, errors.New("No such User")
+		return &pb.LoginReply{Status: false}, errors.New("No such User")
 	}
-	if(in.Pwd==user.password){
-		return &pb.LoginReply{Status:true}, nil
-	}else {
-		return &pb.LoginReply{Status:false}, errors.New("Wrong password")
+	if (in.Pwd == user.password) {
+		return &pb.LoginReply{Status: true}, nil
+	} else {
+		return &pb.LoginReply{Status: false}, errors.New("Wrong password")
 	}
 }
 
-func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddTweetReply, error){
+func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddTweetReply, error) {
 	user, ok := userdata[in.Username]
-	if(!ok){
+	if (!ok) {
 		debugPrint("No such user")
-		return &pb.AddTweetReply{Status:false}, errors.New("No such User")
+		return &pb.AddTweetReply{Status: false}, errors.New("No such User")
 	}
 	newTweet := tweet{text: in.TweetText}
 	user.tweets = append(user.tweets, newTweet)
 	userdata[in.Username] = user
-	return &pb.AddTweetReply{Status:true},nil
+	return &pb.AddTweetReply{Status: true}, nil
 }
 
-func (s *server) OwnTweets(ctx context.Context, in *pb.OwnTweetsRequest) (*pb.OwnTweetsReply, error){
+func (s *server) OwnTweets(ctx context.Context, in *pb.OwnTweetsRequest) (*pb.OwnTweetsReply, error) {
 	user, ok := userdata[in.Username]
-	if(!ok){
+	if (!ok) {
 		debugPrint("No such user")
 		return nil, errors.New("No such User")
 	}
 	response := pb.OwnTweetsReply{}
-	for _,i := range user.tweets{
-		tweetToAdd := pb.Tweet{Text:i.text}
+	for _, i := range user.tweets {
+		tweetToAdd := pb.Tweet{Text: i.text}
 		response.TweetList = append(response.TweetList, &tweetToAdd)
 	}
 	debugPrint("your tweets")
 	fmt.Println(response)
-	return &response,nil
+	return &response, nil
 }
 
 func (s *server) UserExists(ctx context.Context, in *pb.UserExistsRequest) (*pb.UserExistsReply, error) {
-	username:=in.Username
+	username := in.Username
 	_, ok := userdata[username]
-	if(!ok) {
+	if !ok {
 		debugPrint("No such user")
 		return &pb.UserExistsReply{Status: false}, errors.New("No such user exists")
-	}else{
-		return &pb.UserExistsReply{Status:true}, nil
+	} else {
+		return &pb.UserExistsReply{Status: true}, nil
 	}
 }
 
-func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.DeleteReply, error){
+func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.DeleteReply, error) {
 
 	//TODO: for later stages, we might have to add Locks here
-	debugPrint("Deleting User: " + in.Uname +"Account")
-	delete(userdata,in.Uname)
-	return &pb.DeleteReply{DeleteStatus:false}, errors.New("User deleted")
+	debugPrint("Deleting User: " + in.Uname + "Account")
+	delete(userdata, in.Uname)
+	return &pb.DeleteReply{DeleteStatus: false}, nil
 
-	//user, ok := userdata[in.Uname]
-	//if(!ok){
-	//	debugPrint("No such user")
-	//	return &pb.LoginReply{Status:false}, errors.New("No such User")
-	//}
-	//if(in.Pwd==user.password){
-	//	return &pb.LoginReply{Status:true}, nil
-	//}else {
-	//	return &pb.LoginReply{Status:false}, errors.New("Wrong Password")
-	//}
+}
+
+func (s *server) UsersToFollow(ctx context.Context, in *pb.UsersToFollowRequest) (*pb.UsersToFollowResponse, error) {
+	response := &pb.UsersToFollowResponse{}
+	//Get the user from our Map
+	user , isUserPresent := userdata[in.Username]
+	//fmt.Println("Self Username: ", user.username)
+	if isUserPresent {
+		for eachUser := range userdata {
+			_, ok := user.follows[eachUser]
+			//fmt.Println("Each User: ", eachUser)
+			if ok == false && eachUser != user.username {
+				//Preparing a list of all the users to follow list
+				response.UsersToFollowList = append(response.UsersToFollowList, &pb.User{Username: eachUser})
+			}
+		}
+		return response, nil
+	} else {
+		return nil, errors.New("User does not exist!")
+	}
 }
 
 func main() {

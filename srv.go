@@ -20,7 +20,6 @@ const (
 
 var rpcCaller pb.GreeterClient
 
-
 //Handler to deal with only / requests.
 func sayhelloName(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Debug: Sayhello Handler")
@@ -59,26 +58,26 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		//calling rpc to validate user
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname:usr, Pwd:pwd})
+		reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname: usr, Pwd: pwd})
 		//User does not exist - send to registration page
-		if(err!=nil){
-			fmt.Println("Debug: Login rpc failed",err.Error())
-			if(err.Error()=="Wrong Password"){
+		if err != nil {
+			fmt.Println("Debug: Login rpc failed", err.Error())
+			if err.Error() == "Wrong Password" {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
-			}else {
+			} else {
 				http.Redirect(w, r, "/registration", http.StatusSeeOther)
 				return
 			}
 
-		}else if(err==nil&&reply.Status==true){
-			debugPrint("debug: user successufully logged in")
+		} else if err == nil && reply.Status == true {
+			debugPrint("debug: user successfully logged in")
 			expiration := 3600
 			cookie := http.Cookie{Name: "username", Value: usr, MaxAge: expiration}
 			http.SetCookie(w, &cookie)
 			http.Redirect(w, r, "/home", http.StatusSeeOther)
 			return
-		}else {
+		} else {
 			log.Println("Major issue")
 		}
 	}
@@ -115,13 +114,13 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 		//calling rpc to add user
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname:r.Form["username"][0],Pwd:r.Form["password_1"][0]})
-		if(err==nil){
-			fmt.Println("User added using rpc",reply)
+		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0]})
+		if err == nil {
+			fmt.Println("User added using rpc", reply)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
-		}else{
-			fmt.Println("Rpc failed",reply,err)
+		} else {
+			fmt.Println("Rpc failed", reply, err)
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
@@ -140,7 +139,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(ok)
 
 	//Cookie does not exist re-direct to login
-	if (ok != nil) {
+	if ok != nil {
 		fmt.Println("Debug: Cookie doesnt exist. re-direct to login")
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
@@ -149,7 +148,6 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	//Get User Data from Map
 	username := cookie.Value
 	isUserPresent := userExists(username)
-
 
 	//If map returns false, the account has been deleted. Redirect to registration.
 	if !isUserPresent {
@@ -164,7 +162,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		//Post: submission of new tweet. Save the tweet and then display Home.
 		r.ParseForm()
-		addTweet(username,r.Form["tweet"][0])
+		addTweet(username, r.Form["tweet"][0])
 		t, _ := template.ParseFiles("home.html")
 		t.Execute(w, nil)
 
@@ -174,13 +172,13 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	tweets := getMyTweets(username).TweetList
 	if len(tweets) != 0 {
 		fmt.Fprint(w, "<h>Here are your tweets, "+username+":<h><br />")
-	}else{
+	} else {
 		fmt.Fprint(w, "<h>What's on your mind? Make a tweet ! <h><br />")
 	}
 	for _, dispTweet := range tweets {
 		fmt.Fprint(w, dispTweet.Text)
 		fmt.Fprint(w, "<br />")
-	}/*
+	} /*
 	fmt.Fprint(w, "<br /><br />")
 	if len(user.follows)!=0 {
 		fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
@@ -219,27 +217,36 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := cookie.Value
-	user := userdata[username]
+	//user := userdata[username]
 	t, _ := template.ParseFiles("Home.html")
 	t.Execute(w, nil)
 	tofollow := r.URL.Query().Get("tofollow")
 	fmt.Println("tofollow" + tofollow)
-	if tofollow != "" {
-		user.follows[tofollow] = true
-		fmt.Println("Added" + tofollow)
-	}
+	//if tofollow != "" {
+	//	user.follows[tofollow] = true
+	//	fmt.Println("Added" + tofollow)
+	//}
+
 	fmt.Fprint(w, "<h>Folow some Users to see their tweets<h><br/>")
-	for k, _ := range userdata {
-		_, ok := user.follows[k]
-		fmt.Println(k)
-		if (ok == false && k != user.username) {
-			//user is not already following the person. Checking if the user1 from userdata exists in current users follows
-			//fmt.Fprint(w, k)
-			fmt.Fprintf(w, "%s <a href=users?tofollow=%s>Follow</a>", k, k)
+
+	//RPC Call to get all the users to follow
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.UsersToFollow(ctx, &pb.UsersToFollowRequest{Username: username})
+	if err == nil {
+		fmt.Println("UsersToFollow RPC Sucessful", reply)
+		allUsersToFollow := reply.UsersToFollowList
+		for _, eachUser := range allUsersToFollow {
+			//Adding all the users to follow on the website
+			fmt.Fprintf(w, "%s <a href=users?tofollow=%s>Follow</a>", eachUser.Username, eachUser.Username)
 			fmt.Fprint(w, "</br>")
 		}
-
+	} else {
+		fmt.Println("UsersToFollow RPC failed", reply, err)
+		http.Redirect(w, r, "/home", http.StatusSeeOther)
+		return
 	}
+
 }
 
 //Delete Account handler
@@ -256,21 +263,19 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := cookie.Value
-	//Remove user from the user Map
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname:username})
-	if err==nil {
-		fmt.Println("User Deleted rpc",reply)
+	//Remove user from the user Map
+	deleteStatus := deleteUser(username)
+	if deleteStatus == 0 {
+		//Successfully deleted the User
+		deleteCookie(w)
 		http.Redirect(w, r, "/registration", http.StatusSeeOther)
 		return
-	}else{
-		fmt.Println("Rpc failed",reply,err)
-		http.Redirect(w, r, "/registration", http.StatusSeeOther)
+	} else {
+		//Deleting user Failed
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	//deleteUser(username)
 
 	//Delete cookie and redirect to register
 	deleteCookie(w)
@@ -282,7 +287,6 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-
 
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
