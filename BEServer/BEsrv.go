@@ -10,14 +10,36 @@ import (
 	"google.golang.org/grpc/reflection"
 	"fmt"
 	"errors"
+	"sync"
+	"strconv"
+	"os"
+	"time"
 )
 
 const (
-	port = ":50051"
-)
+	NORMAL = iota
+	VIEWCHANGE
+	RECOVERING
+	//port = ":50051"
+	//port = ":50052"
+	//port = ":50053"
+	)
 
 // server is used to implement helloworld.GreeterServer.
-type server struct{}
+
+type server struct {
+	mu             sync.Mutex          // Lock to protect shared access to this peer's state
+	peers          []string // Ports of all peers
+	peerRPC		   [3]pb.GreeterClient
+	me             int      // this peer's index into peers[]
+	currentView    int                 // what this peer believes to be the current active view
+	status         int                 // the server's current status (NORMAL, VIEWCHANGE or RECOVERING)
+	lastNormalView int                 // the latest view which had a NORMAL status
+	log         []string // the log of "commands"
+	commitIndex int           // all log entries <= commitIndex are considered to have been committed.
+	opNo int
+
+}
 
 // SayHello implements helloworld.GreeterServer
 
@@ -60,6 +82,34 @@ func (s *server) SayHelloAgain(ctx context.Context, in *pb.HelloRequest) (*pb.He
 //registeruser function
 func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.RegisterReply, error) {
 
+	if(in.Broadcast==true){
+		//index, view, ok := s.Start(in.String())
+		println(in.String())
+		index, _, ok := s.Start(in.String())
+		if(ok==false){
+			return &pb.RegisterReply{Message: "Debug: Backend Replication system is down."}, errors.New("Backend Replication system is down")
+		}
+		in.Broadcast=false
+		count :=0
+		for i, rpccaller := range s.peerRPC{
+			if(i!=s.me) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				_, err := rpccaller.Register(ctx, in)
+				if (err != nil) {
+					fmt.Printf("Server %d returned an error %v \n", index, err)
+				} else {
+					count++
+				}
+			}
+		}
+		if(count>=len(s.peers)/2){
+			fmt.Println("Debug: replication acheived")
+			s.commitIndex=index
+		}else {
+			fmt.Printf("Debug: Replication failed, replicated only on %d servers",count+1)
+		}
+	}
 	usrname := in.Uname
 	pwd := in.Pwd
 
@@ -199,13 +249,296 @@ func (s *server) GetFriendsTweets(ctx context.Context, in *pb.GetFriendsTweetsRe
 	return response, nil
 }
 
-func main() {
-	lis, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+//This function is used by the FE server to talk to any server and get a response of who the primary is
+func (s *server) WhoIsPrimary(ctx context.Context, in *pb.WhoisPrimaryRequest) (*pb.WhoIsPrimaryResponse, error){
+	primaryIndex := GetPrimary(s.currentView,len(s.peers))
+	if(primaryIndex>-1&&primaryIndex<len(s.peers)) {
+		return &pb.WhoIsPrimaryResponse{Index: int32(primaryIndex)}, nil
 	}
+	return &pb.WhoIsPrimaryResponse{Index:-1},errors.New("Debug: Index of primary out of bounds")
+}
+
+//used to rpc and check if connection is alive
+func (s *server) HeartBeat(ctx context.Context, in *pb.HeartBeatRequest) (*pb.HeartBeatResponse, error){
+	return &pb.HeartBeatResponse{IsAlive:true, CurrentView:int32(s.currentView)},nil
+}
+
+//internal function call
+func GetPrimary(view int, nservers int) int {
+	return view % nservers
+}
+
+//prepare is used to synchronize servers
+func (srv *server) Prepare(ctx context.Context, args *pb.PrepareArgs) (reply *pb.PrepareReply, err error) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	reply = &pb.PrepareReply{}
+	reply.View=int32(srv.currentView)
+	reply.Success=false;
+	if(int(args.View) < srv.currentView){
+		return
+	}
+	if(int(args.Index)<=srv.commitIndex){
+		return
+	}
+	if(int(args.PrimaryCommit)>srv.commitIndex){
+		srv.commitIndex=int(args.PrimaryCommit)
+	}
+	if(int(args.Index)!=srv.opNo+1||int(args.View)>srv.currentView){
+		fmt.Println("Debug: Server needs to recover")
+		//log.Fatal("Debug: Server needs to recover")
+		srv.status = RECOVERING
+		PrimaryIndex:=GetPrimary(int(args.View), len(srv.peers))
+		RecoveryInArgs:=pb.RecoveryArgs{
+			View:args.View,
+			Server:int32(srv.me),
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		RecoveryoutArgs, err := srv.peerRPC[PrimaryIndex].Recovery(ctx,&RecoveryInArgs)
+
+		if(err==nil) {
+			if(RecoveryoutArgs.Success){
+				srv.log=RecoveryoutArgs.Entries
+				srv.commitIndex=int(RecoveryoutArgs.PrimaryCommit)
+				srv.currentView=int(RecoveryoutArgs.View)
+
+				//StartRestoring Data
+				userdata = make(map[string]User)
+				for _,recoveredUser := range RecoveryoutArgs.Data{
+					//recover user credentials
+					userToRecover := User{username:recoveredUser.Username,password:recoveredUser.Password}
+					//recover tweets for user
+					for _,tweetToRecover := range recoveredUser.TweetList{
+						recreatedTweet := tweet{text:tweetToRecover.Text}
+						userToRecover.tweets = append(userToRecover.tweets,recreatedTweet)
+					}
+					//recover users followlist
+					for _, followerToRecover := range  recoveredUser.Follows{
+						userToRecover.follows[followerToRecover] = true
+					}
+					//add user to user data
+					userdata[userToRecover.username]=userToRecover
+				}
+
+				srv.status = NORMAL
+				srv.opNo=len(srv.log)-1
+				//srv.commitIndex=int(args.PrimaryCommit)
+				reply.Success=true
+				fmt.Println(userdata)
+				return reply, nil
+			}else{
+				return reply, errors.New("Debug: Error while recovering")
+
+			}
+		}else{
+			return reply, errors.New("Debug: Error while recovering")
+		}
+	}
+	//srv.commitIndex=args.PrimaryCommit
+	if(int(args.Index)==len(srv.log)){
+		srv.log = append(srv.log,args.Entry)
+		srv.opNo=srv.opNo+1
+		srv.commitIndex=int(args.PrimaryCommit)
+		reply.Success=true
+		return
+	}
+	return
+
+}
+
+//Start calls prepare and returns index to commit on. In this case with >1/2 prepare's start does not immediately write the commit index.
+//The commit index is updated after > 1/2 Prepare+RPC
+func (srv *server) Start(command string) (
+	index int, view int, ok bool) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	// do not process command if status is not NORMAL
+	// and if i am not the primary in the current view
+	if srv.status != NORMAL {
+		return -1, srv.currentView, false
+	} else if GetPrimary(srv.currentView, len(srv.peers)) != srv.me {
+		return -1, srv.currentView, false
+	}
+	srv.log = append(srv.log,command)
+	srv.opNo=srv.opNo+1
+	count:=0
+	length:=len(srv.peers)
+	for i, rpcEndPoint := range srv.peerRPC {
+		if(i!=srv.me){
+
+				pointer := i
+				inArgs:=&pb.PrepareArgs{
+					View:int32(srv.currentView),
+					PrimaryCommit:int32(srv.commitIndex),
+					Index:int32(srv.opNo),
+					Entry:command,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				outArgs, err := rpcEndPoint.Prepare(ctx,inArgs)
+				if(err==nil){
+					if(outArgs.Success==true){
+						count=count+1
+					}else{
+						fmt.Printf("Debug: Prepare rpc to Server %d failed, error is : %s \n",pointer,err)
+						}
+				}else{
+					fmt.Printf("Debug: Prepare rpc to Server %d failed, error is : %s \n",pointer,err)
+				}
+
+		}
+
+	}
+
+
+	if(count>=(length)/2){
+		//	srv.log = append(srv.log,command)
+		//srv.commitIndex=srv.opNo
+		////	index=srv.commitIndex
+		//ok=true
+		ok=true
+		index=srv.opNo
+	}else{
+		index =-1
+		ok=false
+	}
+	return index, view, ok
+}
+
+func (srv *server) Recovery(ctx context.Context, args *pb.RecoveryArgs) (reply *pb.RecoveryReply, err error) {
+
+	reply = &pb.RecoveryReply{}
+	reply.View=int32(srv.currentView)
+	reply.Entries=srv.log
+	reply.PrimaryCommit=int32(srv.commitIndex)
+	reply.Success=true
+
+	//Start Initializing data
+	for _,value :=  range userdata{
+		//add users credentials to userobject
+		userToAdd := &pb.UserData{Username:value.username, Password:value.password}
+
+		//add users tweets to userobject
+		for _, userTweet := range value.tweets {
+			tweetToAdd := &pb.Tweet{Text:userTweet.text}
+			userToAdd.TweetList = append(userToAdd.TweetList, tweetToAdd)
+		}
+
+		//add users followlist to userobject
+		for userFollows, _ := range value.follows{
+			userToAdd.Follows = append(userToAdd.Follows, userFollows)
+		}
+
+		//Now finally after building the userobject append this to the recoveryReply
+		reply.Data = append(reply.Data, userToAdd)
+
+	}
+
+	return reply,nil
+
+
+	return
+}
+
+
+
+
+func main() {
+
+
+	//fetch ServerID to know index in peers list
+	ServerID, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		//handle Error
+		fmt.Println("Debug: Invalid ServerID, Exit",err)
+		os.Exit(2)
+	}
+
+
+	//set up backend server for VSReplication
+	srv := &server{
+		me:             ServerID,
+		currentView:    0,
+		lastNormalView: 0,
+		status:         NORMAL,
+		opNo:		0,
+	}
+	srv.log = append(srv.log,"")
+	srv.peers = append(srv.peers,":50051")
+	srv.peers = append(srv.peers,":50052")
+	srv.peers = append(srv.peers,":50053")
+
+	//set up listner on your own port
+	if(ServerID>=len(srv.peers)||ServerID<0){
+		fmt.Printf("Debug: ServerID %d is not supported. Server Exiting \n",ServerID)
+		os.Exit(2)
+	}
+	lis, err := net.Listen("tcp", srv.peers[srv.me])
+	if err != nil {
+		log.Fatalf("Debug: failed to listen, server could not be started: %v", err)
+		os.Exit(2)
+	}else {
+		fmt.Printf("Woo hoo! server %d started \n",srv.me)
+	}
+
+	//set up rpccaller objects to other peer servers
+	for index, port := range srv.peers {
+		conn, err := grpc.Dial(port, grpc.WithInsecure())
+		if err != nil {
+			log.Fatalf("did not connect: %v to port %s", err, port)
+		}
+		defer conn.Close()
+		//c := pb.NewGreeterClient(conn)
+		srv.peerRPC[index] = pb.NewGreeterClient(conn)
+	}
+
+
+	//This code can probably be used to test if all servers are up using heartbeat. Needs fixes, commented for now
+
+	//ch := make(chan pb.GreeterClient,len(srv.peers))
+	//fmt.Printf("Channel created \n")
+	//for i,rpcclient := range srv.peerRPC{
+	//	fmt.Println("reached1 i=",i)
+	//	if(i!=srv.me) {
+	//		fmt.Printf("started this")
+	//		ch <- rpcclient
+	//		fmt.Println("reached this")
+	//	}
+	//	fmt.Println("reached 2")
+	//}
+	//fmt.Printf("Debug: Waiting for other servers to come up \n %d of 3 servers are up \n",len(ch)-1)
+	//
+	//for len(ch)!=0{
+	//	rpcclient := <-ch
+	//	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	//	defer cancel()
+	//	_, err := rpcclient.HeartBeat(ctx, &pb.HeartBeatRequest{})
+	//	if(err!=nil){
+	//		ch<-rpcclient
+	//		fmt.Println(err)
+	//	}
+	//	fmt.Printf("Debug: %d of 3 servers are up \n",len(ch)-1 )
+	//	time.Sleep(3*time.Second)
+	//}
+
+	//this is a test for coonected-ness between Server's for rpc. Each server tries to contact every other sever
+	for index, rpccaller := range srv.peerRPC{
+		if(index!=srv.me) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			reply, err := rpccaller.WhoIsPrimary(ctx, &pb.WhoisPrimaryRequest{})
+			if (err != nil) {
+				fmt.Printf("Server %d returned an error %v \n", index, err)
+			} else {
+				fmt.Printf("Server %d replied that the primary is %d \n", index, reply.Index)
+			}
+		}
+	}
+
+
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, &server{})
+	pb.RegisterGreeterServer(s, srv)
 	// Register reflection service on gRPC server.
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {

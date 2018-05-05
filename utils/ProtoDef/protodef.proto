@@ -20,6 +20,10 @@ service Greeter {
   rpc UsersToFollow (UsersToFollowRequest) returns (UsersToFollowResponse) {}
   rpc FollowUser (FollowUserRequest) returns (FollowUserResponse) {}
   rpc GetFriendsTweets (GetFriendsTweetsRequest) returns (GetFriendsTweetsResponse) {}
+  rpc WhoIsPrimary (WhoisPrimaryRequest) returns (WhoIsPrimaryResponse) {}
+  rpc HeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {}
+  rpc Prepare (PrepareArgs) returns (PrepareReply) {}
+  rpc Recovery (RecoveryArgs) returns (RecoveryReply) {}
 }
 
 // The request message containing the user's name.
@@ -35,6 +39,7 @@ message HelloReply {
 message Credentials {
     string uname = 1;
     string pwd = 2;
+    bool broadcast = 3;
 }
 
 message RegisterReply {
@@ -56,6 +61,7 @@ message UserExistsRequest {
 message AddTweetRequest {
     string username = 1;
     string tweet_text = 2;
+    bool broadcast = 3;
 }
 
 message AddTweetReply {
@@ -110,4 +116,73 @@ message UsersAllTweets {
 
 message GetFriendsTweetsResponse {
     repeated UsersAllTweets friendsTweets = 1;
+}
+
+
+//RPC's for viewstamp replication
+
+message PrepareArgs {
+	int32 View = 1;                    // the primary's current view
+	int32 PrimaryCommit = 2;          // the primary's commitIndex
+	int32 Index = 3;                 // the index position at which the log entry is to be replicated on backups
+	string Entry = 4;
+}
+
+
+message PrepareReply  {
+	int32 View = 1;                  // the backup's current view
+	bool Success = 2;               // whether the Prepare request has been accepted or rejected
+}
+
+message RecoveryArgs  {
+	int32 View = 1;                     // the view that the backup would like to synchronize with
+	int32 Server = 2;                  // the server sending the Recovery RPC (for debugging)
+}
+
+message RecoveryReply {
+	int32 View = 1;                     // the view of the primary
+	repeated string Entries =2;        // the primary's log including entries replicated up to and including the view.
+	int32 PrimaryCommit =3;           // the primary's commitIndex
+	bool Success =4;                 // whether the Recovery request has been accepted or rejected
+	repeated UserData Data = 5;
+}
+
+message UserData {
+    string Username =1;
+    string Password =2;
+    repeated Tweet TweetList = 3;
+    repeated string Follows =4;
+}
+
+message ViewChangeArgs {
+	int32 View =1;                        // the new view to be changed into
+}
+
+message ViewChangeReply  {
+	int32 LastNormalView  =1;            // the latest view which had a NORMAL status at the server
+	repeated string Log =2;             // the log at the server
+	bool Success=3;                    // whether the ViewChange request has been accepted/rejected
+}
+
+message StartViewArgs {
+	int32 View =1;                        // the new view which has completed view-change
+	repeated string Log=2;             // the log associated with the new new
+}
+
+message StartViewReply {
+}
+
+message WhoisPrimaryRequest {
+}
+
+message WhoIsPrimaryResponse {
+    int32 Index =1;
+}
+
+message HeartBeatRequest {
+}
+
+message HeartBeatResponse {
+    bool IsAlive = 1;
+    int32 currentView = 2;
 }

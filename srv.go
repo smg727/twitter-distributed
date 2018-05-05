@@ -114,7 +114,7 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 		//calling rpc to add user
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0]})
+		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0],Broadcast:true})
 		if err == nil {
 			fmt.Println("User added using rpc", reply)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
