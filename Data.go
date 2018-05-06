@@ -31,7 +31,7 @@ func userExists(uname string) bool {
 func addTweet(username string, tweettext string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := rpcCaller.AddTweet(ctx, &pb.AddTweetRequest{Username: username, TweetText: tweettext})
+	_, err := rpcCaller.AddTweet(ctx, &pb.AddTweetRequest{Username: username, TweetText: tweettext, Broadcast:true})
 	if (err != nil) {
 		fmt.Println("Debug: tweet addition failed", err)
 	}
@@ -49,13 +49,12 @@ func getMyTweets(username string) *pb.OwnTweetsReply {
 	return reply
 }
 
-
 //Delete a user account
 func deleteUser(username string) int {
 	//TODO: for later stages, we might have to add Locks here
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname: username})
+	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname: username, Broadcast: true})
 	if err == nil {
 		fmt.Println("Delete User RPC successful", reply)
 		return 0
@@ -64,7 +63,6 @@ func deleteUser(username string) int {
 		return -1
 	}
 }
-
 
 func deleteCookie(w http.ResponseWriter) {
 	cookie := http.Cookie{Name: "username", MaxAge: -1}

@@ -114,13 +114,13 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 		//calling rpc to add user
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0],Broadcast:true})
+		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0], Broadcast: true})
 		if err == nil {
 			fmt.Println("User added using rpc", reply)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		} else {
-			fmt.Println("Rpc failed", reply, err)
+			fmt.Println("RPC to master failed", reply, err)
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
@@ -250,10 +250,9 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("tofollow" + toFollow)
 
 	if toFollow != "" {
-		//TODO: Discuss if we shall move this RPC call and the below one to a separate function in Data.go
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := rpcCaller.FollowUser(ctx, &pb.FollowUserRequest{SelfUsername: username, ToFollowUsername: toFollow})
+		reply, err := rpcCaller.FollowUser(ctx, &pb.FollowUserRequest{SelfUsername: username, ToFollowUsername: toFollow, Broadcast:true})
 		if err == nil {
 			fmt.Println("User " + username + " successfully followed user " + toFollow)
 		} else {
@@ -338,6 +337,7 @@ func main() {
 	if len(os.Args) > 1 {
 		name = os.Args[1]
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	r, err := rpcCaller.SayHello(ctx, &pb.HelloRequest{Name: name})

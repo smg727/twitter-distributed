@@ -99,6 +99,7 @@ message UsersToFollowResponse {
 message FollowUserRequest {
     string selfUsername = 1;
     string toFollowUsername = 2;
+    bool broadcast = 3;
 }
 
 message FollowUserResponse {
