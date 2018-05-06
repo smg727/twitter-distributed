@@ -86,7 +86,7 @@ func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.Register
 		println(in.String())
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Debug: Backend Replication / Majority servers down, discarding last Register operation")
+			debugPrint("Debug: Discarding last Register operation")
 			return &pb.RegisterReply{Message: "Debug: Backend Replication system is down."}, errors.New("Backend Replication system is down.")
 		}
 		in.Broadcast = false
@@ -149,7 +149,7 @@ func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddT
 		//Starting Prepare
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Debug: Backend Replication / Majority servers down, discarding last Add tweet operation")
+			debugPrint("Discarding last Add Tweet operation")
 			return &pb.AddTweetReply{Status: false}, errors.New("Backend Replication system down")
 		}
 
@@ -234,7 +234,7 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 		//Starting Prepare
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Debug: Backend Replication / Majority servers down, discarding last Delete operation")
+			debugPrint("Debug: Discarding last Delete operation")
 			return &pb.DeleteReply{DeleteStatus: false}, errors.New("Backend Replication system down")
 		}
 
@@ -290,7 +290,7 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 		//Starting Prepare
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Debug: Backend Replication / Majority servers down, discarding last Follow User operation")
+			debugPrint("Debug: Discarding last Follow User operation")
 			return &pb.FollowUserResponse{FollowStatus : false}, errors.New("Backend Replication system down")
 		}
 
@@ -498,9 +498,11 @@ func (srv *server) Start(command string) (index int, view int, ok bool) {
 	// do not process command if status is not NORMAL
 	// and if i am not the primary in the current view
 	if srv.status != NORMAL {
+		debugPrint("Debug: Request can't be processed as the Server is not in NORMAL mode")
 		return -1, srv.currentView, false
 	} else if GetPrimary(srv.currentView, len(srv.peers)) != srv.me {
 		//Check if you're the Primary
+		debugPrint("Debug: Illegal request made to a Non-primary server")
 		return -1, srv.currentView, false
 	}
 
@@ -550,6 +552,7 @@ func (srv *server) Start(command string) (index int, view int, ok bool) {
 	} else {
 		index = -1
 		ok = false
+		debugPrint("Debug: Back-end Replication Down (Majority of Servers unresponsive)")
 	}
 	return index, view, ok
 }

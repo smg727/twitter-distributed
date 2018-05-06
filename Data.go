@@ -18,48 +18,65 @@ func debugPrint(text string) {
 }
 
 func userExists(uname string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.UserExists(ctx, &pb.UserExistsRequest{Username: uname})
-	if err == nil {
-		return reply.Status
+	if isServerAlive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.UserExists(ctx, &pb.UserExistsRequest{Username: uname})
+		if err == nil {
+			return reply.Status
+		}
+		fmt.Println("Debug: userExists rpc returned false", err)
+		return false
+	} else {
+		debugPrint("Debug: Primary server down, cant process requests")
+		return false
 	}
-	fmt.Println("Debug: userExists rpc returned false", err)
-	return false
 }
 
 func addTweet(username string, tweettext string) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err := rpcCaller.AddTweet(ctx, &pb.AddTweetRequest{Username: username, TweetText: tweettext, Broadcast:true})
-	if (err != nil) {
-		fmt.Println("Debug: tweet addition failed", err)
+	if isServerAlive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err := rpcCaller.AddTweet(ctx, &pb.AddTweetRequest{Username: username, TweetText: tweettext, Broadcast: true})
+		if err != nil {
+			fmt.Println("Debug: tweet addition failed", err)
+		}
+	} else {
+		debugPrint("Debug: Primary server down, cant process requests")
 	}
-
 }
 
 func getMyTweets(username string) *pb.OwnTweetsReply {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.OwnTweets(ctx, &pb.OwnTweetsRequest{Username: username})
-	if err != nil {
-		fmt.Println(err)
+	if isServerAlive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.OwnTweets(ctx, &pb.OwnTweetsRequest{Username: username})
+		if err != nil {
+			fmt.Println(err)
+			return nil
+		}
+		return reply
+	} else {
+		debugPrint("Debug: Primary server down, cant process requests")
 		return nil
 	}
-	return reply
 }
 
 //Delete a user account
 func deleteUser(username string) int {
-	//TODO: for later stages, we might have to add Locks here
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname: username, Broadcast: true})
-	if err == nil {
-		fmt.Println("Delete User RPC successful", reply)
-		return 0
+	if isServerAlive() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.DeleteUser(ctx, &pb.Credentials{Uname: username, Broadcast: true})
+		if err == nil {
+			fmt.Println("Delete User RPC successful", reply)
+			return 0
+		} else {
+			fmt.Println("Delete User RPC failed", reply, err)
+			return -1
+		}
 	} else {
-		fmt.Println("Delete User RPC failed", reply, err)
+		debugPrint("Debug: Primary server down, cant process requests")
 		return -1
 	}
 }
@@ -69,4 +86,26 @@ func deleteCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &cookie)
 	debugPrint("Debug:Cookie Deleted")
 	return
+}
+
+// Used to check if Primary server is alive. Returns true for alive.
+func isServerAlive() bool{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	reply, err := rpcCaller.HeartBeat(ctx, &pb.HeartBeatRequest{})
+	if err == nil && reply.IsAlive{
+		debugPrint("Debug: Heartbeat to Primary Successful")
+
+		//Re-writing the FE servers global 'currentView' variable to make sure it matches with the Backend server
+		currentView = int(reply.CurrentView)
+		return true
+	} else {
+		debugPrint("Debug: Heartbeat to Primary Failed")
+		//TODO: Start View Change here
+
+
+		//TODO: the below return false can be changed to true (if view change is successful)
+		return false
+	}
+	return false
 }

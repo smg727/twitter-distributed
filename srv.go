@@ -14,9 +14,16 @@ import (
 )
 
 const (
-	address     = "localhost:50051"
+	//address     = "localhost:50051"
 	defaultName = "world"
 )
+
+// Global variables for View Change
+var peers []string
+var peerRPC [3]pb.GreeterClient
+var currentView int
+var primaryServerIndex int
+
 
 var rpcCaller pb.GreeterClient
 
@@ -55,30 +62,36 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		usr := r.Form["username"][0]
 		pwd := r.Form["password"][0]
 		//ok, actualPassword := getPassword(usr)
-		//calling rpc to validate user
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname: usr, Pwd: pwd})
-		//User does not exist - send to registration page
-		if err != nil {
-			fmt.Println("Debug: Login rpc failed", err.Error())
-			if err.Error() == "Wrong Password" {
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+
+		// Calling RPC to validate user
+		// Check if Primary alive
+		if isServerAlive() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			reply, err := rpcCaller.Login(ctx, &pb.Credentials{Uname: usr, Pwd: pwd})
+			//User does not exist - send to registration page
+			if err != nil {
+				fmt.Println("Debug: Login rpc failed", err.Error())
+				if err.Error() == "Wrong Password" {
+					http.Redirect(w, r, "/login", http.StatusSeeOther)
+					return
+				} else {
+					http.Redirect(w, r, "/registration", http.StatusSeeOther)
+					return
+				}
+
+			} else if err == nil && reply.Status == true {
+				debugPrint("debug: user successfully logged in")
+				expiration := 3600
+				cookie := http.Cookie{Name: "username", Value: usr, MaxAge: expiration}
+				http.SetCookie(w, &cookie)
+				http.Redirect(w, r, "/home", http.StatusSeeOther)
 				return
 			} else {
-				http.Redirect(w, r, "/registration", http.StatusSeeOther)
-				return
+				log.Println("Major issue")
 			}
-
-		} else if err == nil && reply.Status == true {
-			debugPrint("debug: user successfully logged in")
-			expiration := 3600
-			cookie := http.Cookie{Name: "username", Value: usr, MaxAge: expiration}
-			http.SetCookie(w, &cookie)
-			http.Redirect(w, r, "/home", http.StatusSeeOther)
-			return
 		} else {
-			log.Println("Major issue")
+			debugPrint("Debug: Primary server down, cant process requests")
 		}
 	}
 }
@@ -105,27 +118,28 @@ func registrationHandler(w http.ResponseWriter, r *http.Request) {
 			if debugon {
 				fmt.Println("Debug: Empty Username or Password value")
 			}
-			//TODO: Remove Alert?
-			//fmt.Fprintln(w, "<script>alert(\"Please enter a valid Username and Password\")</script>")
 			http.Redirect(w, r, "/registration", http.StatusSeeOther)
 			return
 		}
 
-		//calling rpc to add user
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0], Broadcast: true})
-		if err == nil {
-			fmt.Println("User added using rpc", reply)
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
+		//Check if Primary server is alive
+		if isServerAlive() {
+			// Calling RPC to add user
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			reply, err := rpcCaller.Register(ctx, &pb.Credentials{Uname: r.Form["username"][0], Pwd: r.Form["password_1"][0], Broadcast: true})
+			if err == nil {
+				fmt.Println("User added using rpc", reply)
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+				return
+			} else {
+				fmt.Println("RPC to master failed", reply, err)
+				http.Redirect(w, r, "/registration", http.StatusSeeOther)
+				return
+			}
 		} else {
-			fmt.Println("RPC to master failed", reply, err)
-			http.Redirect(w, r, "/registration", http.StatusSeeOther)
-			return
+			debugPrint("Debug: Primary server down, cant process requests")
 		}
-
-		//Adding username and password to the Map
 
 	}
 }
@@ -181,35 +195,40 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "</p>")
 	}
 
-	// Initiate RPC call to get all the friends tweets
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.GetFriendsTweets(ctx, &pb.GetFriendsTweetsRequest{Username: username})
-	if err == nil {
-		fmt.Println("Successful GetFriendsTweets RPC")
-		allFriendsTweets := reply.FriendsTweets
-		fmt.Fprint(w, "<br /><br />")
-		if len(allFriendsTweets) != 0 {
-			fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
-		} else {
-			fmt.Fprint(w, "<h>Go right ahead, Discover some users to follow<h><br />")
-		}
-
-		for _, eachUser := range allFriendsTweets {
-			//Print Friend's name
-			fmt.Fprint(w, "<br/>"+eachUser.Username.Username+":"+"<br/>")
-			for _, eachTweet := range eachUser.Tweets {
-				//Print Friend's all the tweets
-				fmt.Fprint(w, "<p>")
-				fmt.Fprint(w, eachTweet.Text)
-				fmt.Fprint(w, "</p>")
+	//Check if Primary server is alive
+	if isServerAlive() {
+		// Initiate RPC call to get all the friends tweets
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.GetFriendsTweets(ctx, &pb.GetFriendsTweetsRequest{Username: username})
+		if err == nil {
+			fmt.Println("Successful GetFriendsTweets RPC")
+			allFriendsTweets := reply.FriendsTweets
+			fmt.Fprint(w, "<br /><br />")
+			if len(allFriendsTweets) != 0 {
+				fmt.Fprint(w, "<h>Here are your friends tweets:<h><br />")
+			} else {
+				fmt.Fprint(w, "<h>Go right ahead, Discover some users to follow<h><br />")
 			}
+
+			for _, eachUser := range allFriendsTweets {
+				//Print Friend's name
+				fmt.Fprint(w, "<br/>"+eachUser.Username.Username+":"+"<br/>")
+				for _, eachTweet := range eachUser.Tweets {
+					//Print Friend's all the tweets
+					fmt.Fprint(w, "<p>")
+					fmt.Fprint(w, eachTweet.Text)
+					fmt.Fprint(w, "</p>")
+				}
+			}
+			return
+		} else {
+			fmt.Println("GetFriendsTweets RPC failed", reply, err)
+			http.Redirect(w, r, "/home", http.StatusSeeOther)
+			return
 		}
-		return
 	} else {
-		fmt.Println("GetFriendsTweets RPC failed", reply, err)
-		http.Redirect(w, r, "/home", http.StatusSeeOther)
-		return
+		debugPrint("Debug: Primary server down, cant process requests")
 	}
 
 }
@@ -250,37 +269,46 @@ func usersHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("tofollow" + toFollow)
 
 	if toFollow != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		reply, err := rpcCaller.FollowUser(ctx, &pb.FollowUserRequest{SelfUsername: username, ToFollowUsername: toFollow, Broadcast:true})
-		if err == nil {
-			fmt.Println("User " + username + " successfully followed user " + toFollow)
+		if isServerAlive() {
+			//Invoking RPC to request a new to Follow operation
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			reply, err := rpcCaller.FollowUser(ctx, &pb.FollowUserRequest{SelfUsername: username, ToFollowUsername: toFollow, Broadcast: true})
+			if err == nil {
+				fmt.Println("User " + username + " successfully followed user " + toFollow)
+			} else {
+				fmt.Println("FollowUser RPC failed", reply, err)
+				http.Redirect(w, r, "/users", http.StatusSeeOther)
+				return
+			}
 		} else {
-			fmt.Println("FollowUser RPC failed", reply, err)
-			http.Redirect(w, r, "/users", http.StatusSeeOther)
-			return
+			debugPrint("Debug: Primary server down, cant process requests")
 		}
 
 	}
 
 	fmt.Fprint(w, "<h>Follow some Users to see their Tweets<h><br/>")
 
-	//RPC Call to get all the users to follow
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	reply, err := rpcCaller.UsersToFollow(ctx, &pb.UsersToFollowRequest{Username: username})
-	if err == nil {
-		fmt.Println("UsersToFollow RPC Sucessful", reply)
-		allUsersToFollow := reply.UsersToFollowList
-		for _, eachUser := range allUsersToFollow {
-			//Adding all the users to follow on the website
-			fmt.Fprintf(w, "%s <a href=users?tofollow=%s>Follow</a>", eachUser.Username, eachUser.Username)
-			fmt.Fprint(w, "</br>")
+	if isServerAlive() {
+		//RPC Call to get all the users to follow
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		reply, err := rpcCaller.UsersToFollow(ctx, &pb.UsersToFollowRequest{Username: username})
+		if err == nil {
+			fmt.Println("UsersToFollow RPC Sucessful", reply)
+			allUsersToFollow := reply.UsersToFollowList
+			for _, eachUser := range allUsersToFollow {
+				//Adding all the users to follow on the website
+				fmt.Fprintf(w, "%s <a href=users?tofollow=%s>Follow</a>", eachUser.Username, eachUser.Username)
+				fmt.Fprint(w, "</br>")
+			}
+		} else {
+			fmt.Println("UsersToFollow RPC failed", reply, err)
+			http.Redirect(w, r, "/home", http.StatusSeeOther)
+			return
 		}
 	} else {
-		fmt.Println("UsersToFollow RPC failed", reply, err)
-		http.Redirect(w, r, "/home", http.StatusSeeOther)
-		return
+		debugPrint("Debug: Primary server down, cant process requests")
 	}
 
 }
@@ -324,13 +352,25 @@ func faviconHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+	//Adding all the servers
+	peers = append(peers, ":50051")
+	peers = append(peers, ":50052")
+	peers = append(peers, ":50053")
+
+	// Creating RPC greeter clients for all the servers
+	for index, port := range peers {
+		conn, err := grpc.Dial(port, grpc.WithInsecure())
+		if err != nil {
+			log.Fatalf("did not connect: %v to port %s", err, port)
+		}
+		defer conn.Close()
+		peerRPC[index] = pb.NewGreeterClient(conn)
 	}
-	defer conn.Close()
-	//c := pb.NewGreeterClient(conn)
-	rpcCaller = pb.NewGreeterClient(conn)
+
+	// Assigning the initially known Primary server
+	primaryServerIndex = 0
+	currentView = 0
+	rpcCaller = peerRPC[0]
 
 	// Contact the server and print out its response. TO test if RPC is working
 	name := defaultName
