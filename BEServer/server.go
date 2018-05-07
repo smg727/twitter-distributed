@@ -253,126 +253,126 @@ func (srv *server) sendPrepare(server int, args *pb.PrepareArgs, reply *pb.Prepa
 // switch to the newView.
 // PromptViewChange just kicks start the view change protocol to move to the newView
 // It does not block waiting for the view change process to complete.
-func (srv *server) PromptViewChange(newView int) {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
-	newPrimary := GetPrimary(newView, len(srv.peers))
-
-	if newPrimary != srv.me { //only primary of newView should do view change
-		return
-	} else if newView <= srv.currentView {
-		return
-	}
-	vcArgs := &ViewChangeArgs{
-		View: newView,
-	}
-	vcReplyChan := make(chan *ViewChangeReply, len(srv.peers))
-	// send ViewChange to all servers including myself
-	for i := 0; i < len(srv.peers); i++ {
-		go func(server int) {
-			var reply ViewChangeReply
-			ok := srv.peers[server].Call("server.ViewChange", vcArgs, &reply)
-			// fmt.Printf("node-%d (nReplies %d) received reply ok=%v reply=%v\n", srv.me, nReplies, ok, r.reply)
-			if ok {
-				vcReplyChan <- &reply
-			} else {
-				vcReplyChan <- nil
-			}
-		}(i)
-	}
-
-	// wait to receive ViewChange replies
-	// if view change succeeds, send StartView RPC
-	go func() {
-		var successReplies []*ViewChangeReply
-		var nReplies int
-		majority := len(srv.peers)/2 + 1
-		for r := range vcReplyChan {
-			nReplies++
-			if r != nil && r.Success {
-				successReplies = append(successReplies, r)
-			}
-			if nReplies == len(srv.peers) || len(successReplies) == majority {
-				break
-			}
-		}
-		ok, log := srv.determineNewViewLog(successReplies)
-		if !ok {
-			return
-		}
-		svArgs := &StartViewArgs{
-			View: vcArgs.View,
-			Log:  log,
-		}
-		// send StartView to all servers including myself
-		for i := 0; i < len(srv.peers); i++ {
-			var reply StartViewReply
-			go func(server int) {
-				//fmt.Printf("Debug: node-%d sending StartView v=%d to node-%d\n", srv.me, svArgs.View, server)
-				srv.peers[server].Call("server.StartView", svArgs, &reply)
-			}(i)
-		}
-	}()
-}
+//func (srv *server) PromptViewChange(newView int) {
+//	srv.mu.Lock()
+//	defer srv.mu.Unlock()
+//	newPrimary := GetPrimary(newView, len(srv.peers))
+//
+//	if newPrimary != srv.me { //only primary of newView should do view change
+//		return
+//	} else if newView <= srv.currentView {
+//		return
+//	}
+//	vcArgs := &ViewChangeArgs{
+//		View: newView,
+//	}
+//	vcReplyChan := make(chan *ViewChangeReply, len(srv.peers))
+//	// send ViewChange to all servers including myself
+//	for i := 0; i < len(srv.peers); i++ {
+//		go func(server int) {
+//			var reply ViewChangeReply
+//			ok := srv.peers[server].Call("server.ViewChange", vcArgs, &reply)
+//			// fmt.Printf("node-%d (nReplies %d) received reply ok=%v reply=%v\n", srv.me, nReplies, ok, r.reply)
+//			if ok {
+//				vcReplyChan <- &reply
+//			} else {
+//				vcReplyChan <- nil
+//			}
+//		}(i)
+//	}
+//
+//	// wait to receive ViewChange replies
+//	// if view change succeeds, send StartView RPC
+//	go func() {
+//		var successReplies []*ViewChangeReply
+//		var nReplies int
+//		majority := len(srv.peers)/2 + 1
+//		for r := range vcReplyChan {
+//			nReplies++
+//			if r != nil && r.Success {
+//				successReplies = append(successReplies, r)
+//			}
+//			if nReplies == len(srv.peers) || len(successReplies) == majority {
+//				break
+//			}
+//		}
+//		ok, log := srv.determineNewViewLog(successReplies)
+//		if !ok {
+//			return
+//		}
+//		svArgs := &StartViewArgs{
+//			View: vcArgs.View,
+//			Log:  log,
+//		}
+//		// send StartView to all servers including myself
+//		for i := 0; i < len(srv.peers); i++ {
+//			var reply StartViewReply
+//			go func(server int) {
+//				//fmt.Printf("Debug: node-%d sending StartView v=%d to node-%d\n", srv.me, svArgs.View, server)
+//				srv.peers[server].Call("server.StartView", svArgs, &reply)
+//			}(i)
+//		}
+//	}()
+//}
 
 // determineNewViewLog is invoked to determine the log for the newView based on
 // the collection of replies for successful ViewChange requests.
 // if a quorum of successful replies exist, then ok is set to true.
 // otherwise, ok = false.
-func (srv *server) determineNewViewLog(successReplies []*ViewChangeReply) (
-	ok bool, newViewLog []interface{}) {
-	// Your code here
-	lenSucess:=len(successReplies)
-	Majority:=(len(srv.peers)-1)/2+1
-	if(lenSucess<Majority){
-		ok=false
-		return
-	}
-	Index:=0
-	MaxView:=0
-	MaxLength:=0
-	for i,reply :=  range successReplies{
-		if(reply.LastNormalView>MaxView){
-			Index=i
-			MaxView=reply.LastNormalView
-			MaxLength=len(reply.Log)
-		}
-		if(reply.LastNormalView==MaxView && len(reply.Log)>MaxLength){
-			Index=i
-			MaxView=reply.LastNormalView
-			MaxLength=len(reply.Log)
-		}
-	}
-	newViewLog=successReplies[Index].Log
-	ok=true
-	return ok, newViewLog
-}
+//func (srv *server) determineNewViewLog(successReplies []*ViewChangeReply) (
+//	ok bool, newViewLog []interface{}) {
+//	// Your code here
+//	lenSucess:=len(successReplies)
+//	Majority:=(len(srv.peers)-1)/2+1
+//	if(lenSucess<Majority){
+//		ok=false
+//		return
+//	}
+//	Index:=0
+//	MaxView:=0
+//	MaxLength:=0
+//	for i,reply :=  range successReplies{
+//		if(reply.LastNormalView>MaxView){
+//			Index=i
+//			MaxView=reply.LastNormalView
+//			MaxLength=len(reply.Log)
+//		}
+//		if(reply.LastNormalView==MaxView && len(reply.Log)>MaxLength){
+//			Index=i
+//			MaxView=reply.LastNormalView
+//			MaxLength=len(reply.Log)
+//		}
+//	}
+//	newViewLog=successReplies[Index].Log
+//	ok=true
+//	return ok, newViewLog
+//}
 
 // ViewChange is the RPC handler to process ViewChange RPC.
-func (srv *server) ViewChange(args *ViewChangeArgs, reply *ViewChangeReply) {
-	// Your code here
-	if(args.View<=srv.currentView){
-		reply.Success=false
-		return
-	}
-	reply.LastNormalView=srv.currentView
-	reply.Log=srv.log
-	reply.Success=true
-	srv.lastNormalView=srv.currentView
-	srv.currentView=args.View
-	srv.status=VIEWCHANGE
-	return
-}
+//func (srv *server) ViewChange(args *ViewChangeArgs, reply *ViewChangeReply) {
+//	// Your code here
+//	if(args.View<=srv.currentView){
+//		reply.Success=false
+//		return
+//	}
+//	reply.LastNormalView=srv.currentView
+//	reply.Log=srv.log
+//	reply.Success=true
+//	srv.lastNormalView=srv.currentView
+//	srv.currentView=args.View
+//	srv.status=VIEWCHANGE
+//	return
+//}
 
 // StartView is the RPC handler to process StartView RPC.
-func (srv *server) StartView(args *StartViewArgs, reply *StartViewReply) {
-	if(srv.currentView>args.View){
-		return
-	}
-	srv.currentView=args.View
-	srv.log=args.Log
-	srv.status=NORMAL
-	srv.opNo=len(srv.log)-1
-	return
-
-}
+//func (srv *server) StartView(args *StartViewArgs, reply *StartViewReply) {
+//	if(srv.currentView>args.View){
+//		return
+//	}
+//	srv.currentView=args.View
+//	srv.log=args.Log
+//	srv.status=NORMAL
+//	srv.opNo=len(srv.log)-1
+//	return
+//
+//}

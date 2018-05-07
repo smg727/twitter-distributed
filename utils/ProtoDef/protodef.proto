@@ -24,6 +24,9 @@ service Greeter {
   rpc HeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {}
   rpc Prepare (PrepareArgs) returns (PrepareReply) {}
   rpc Recovery (RecoveryArgs) returns (RecoveryReply) {}
+  rpc ViewChange (ViewChangeArgs) returns (ViewChangeReply) {}
+  rpc PromptViewChange (PromptViewChangeArgs) returns (PromptViewChangeReply) {}
+  rpc StartView (StartViewArgs) returns (StartViewReply) {}
 }
 
 // The request message containing the user's name.
@@ -186,4 +189,12 @@ message HeartBeatRequest {
 message HeartBeatResponse {
     bool IsAlive = 1;
     int32 currentView = 2;
+}
+
+message PromptViewChangeArgs {
+    int32 NewView = 1;
+}
+
+message PromptViewChangeReply {
+    bool Success = 1;
 }

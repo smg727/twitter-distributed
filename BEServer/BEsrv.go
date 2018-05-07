@@ -591,6 +591,132 @@ func (srv *server) Recovery(ctx context.Context, args *pb.RecoveryArgs) (reply *
 	return
 }
 
+func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChangeArgs) (reply *pb.PromptViewChangeReply, err error) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	newView := int(args.NewView)
+	newPrimary := GetPrimary(newView, len(srv.peers))
+
+	if newPrimary != srv.me { //only primary of newView should do view change
+		return
+	} else if newView <= srv.currentView {
+		return
+	}
+	vcArgs := &pb.ViewChangeArgs{
+		View: int32(newView),
+	}
+	vcReplyChan := make(chan *pb.ViewChangeReply, len(srv.peers))
+	// send ViewChange to all servers including myself
+	for i := 0; i < len(srv.peers); i++ {
+		go func(server int) {
+			val := server
+			var reply *pb.ViewChangeReply
+			//ok := srv.peers[server].Call("server.ViewChange", vcArgs, &reply)
+			// fmt.Printf("node-%d (nReplies %d) received reply ok=%v reply=%v\n", srv.me, nReplies, ok, r.reply)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			fmt.Println(val)
+			reply, err := srv.peerRPC[val].ViewChange(ctx,vcArgs)
+			if err==nil && reply.Success == true {
+				vcReplyChan <- reply
+			} else {
+				vcReplyChan <- nil
+			}
+		}(i)
+	}
+	fmt.Println("Debug: starting view change")
+	// wait to receive ViewChange replies
+	// if view change succeeds, send StartView RPC
+	go func() {
+		var successReplies []*pb.ViewChangeReply
+		var nReplies int
+		majority := len(srv.peers)/2 + 1
+		for r := range vcReplyChan {
+			nReplies++
+			if r != nil && r.Success {
+				successReplies = append(successReplies, r)
+			}
+			if nReplies == len(srv.peers) || len(successReplies) == majority {
+				break
+			}
+		}
+		ok, log := srv.determineNewViewLog(successReplies)
+		if !ok {
+			return
+		}
+		svArgs := &pb.StartViewArgs{
+			View: vcArgs.View,
+			Log:  log,
+		}
+		// send StartView to all servers including myself
+		for i := 0; i < len(srv.peers); i++ {
+			go func(server int) {
+				//fmt.Printf("Debug: node-%d sending StartView v=%d to node-%d\n", srv.me, svArgs.View, server)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				_, _ = srv.peerRPC[server].StartView(ctx, svArgs)
+			}(i)
+		}
+	}()
+	return &pb.PromptViewChangeReply{Success:true}, nil
+}
+
+func (srv *server) determineNewViewLog(successReplies []*pb.ViewChangeReply) (ok bool,log []string)  {
+	// Your code here
+	lenSucess:=len(successReplies)
+	Majority:=(len(srv.peers)-1)/2+1
+	if(lenSucess<Majority){
+		ok=false
+		return
+	}
+	Index:=0
+	MaxView:=0
+	MaxLength:=0
+	for i,reply :=  range successReplies{
+		if(int(reply.LastNormalView)>MaxView){
+			Index=i
+			MaxView=int(reply.LastNormalView)
+			MaxLength=len(reply.Log)
+		}
+		if(int(reply.LastNormalView)==MaxView && len(reply.Log)>MaxLength){
+			Index=i
+			MaxView=int(reply.LastNormalView)
+			MaxLength=len(reply.Log)
+		}
+	}
+	log =successReplies[Index].Log
+	ok=true
+	return ok, log
+}
+
+func (srv *server) StartView(ctx context.Context, args *pb.StartViewArgs) (reply *pb.StartViewReply, err error) {
+	if(srv.currentView>int(args.View)){
+		return &pb.StartViewReply{}, errors.New("Debug: Start View Failed")
+	}
+	srv.currentView=int(args.View)
+	//srv.log=args.Log
+	srv.status=NORMAL
+	//srv.opNo=len(srv.log)-1
+	return &pb.StartViewReply{}, nil
+
+}
+
+func (srv *server) ViewChange(ctx context.Context, args *pb.ViewChangeArgs) (reply *pb.ViewChangeReply,err error) {
+	// Your code here
+	reply = &pb.ViewChangeReply{}
+	if(int(args.View)<=srv.currentView){
+		reply.Success=false
+		return reply, errors.New("Debug: Server View greater than ViewChange Request")
+	}
+	reply.LastNormalView=int32(srv.currentView)
+	reply.Log=srv.log
+	reply.Success=true
+	srv.lastNormalView=srv.currentView
+	srv.currentView=int(args.View)
+	srv.status=VIEWCHANGE
+	return reply, nil
+}
+
 func main() {
 
 	//fetch ServerID to know index in peers list
