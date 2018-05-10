@@ -327,8 +327,6 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 		}
 	}
 
-
-
 	//debugPrint("User: " + in.SelfUsername + " has requested to follow: " + in.ToFollowUsername)
 	//Getting user from user data map and adding the new user to be followed
 	user, ok := userdata[in.SelfUsername]

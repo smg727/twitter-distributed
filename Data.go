@@ -120,7 +120,6 @@ func isServerAlive() bool{
 			return true
 		}
 
-
 		//TODO: the below return false can be changed to true (if view change is successful)
 		return false
 	}
