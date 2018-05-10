@@ -83,11 +83,11 @@ func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.Register
 
 	if in.Broadcast == true {
 		//index, view, ok := s.Start(in.String())
-		println(in.String())
+		//println(in.String())
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Debug: Discarding last Register operation")
-			return &pb.RegisterReply{Message: "Debug: Backend Replication system is down."}, errors.New("Backend Replication system is down.")
+			debugPrint("Error: Discarding last Register operation")
+			return &pb.RegisterReply{Message: "Error: Backend Replication system is down."}, errors.New("backend replication system is down")
 		}
 		in.Broadcast = false
 		count := 0
@@ -97,17 +97,18 @@ func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.Register
 				defer cancel()
 				_, err := rpccaller.Register(ctx, in)
 				if err != nil {
-					fmt.Printf("Server %d returned an error %v \n", index, err)
+					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					count++
 				}
 			}
 		}
 		if count >= len(s.peers)/2 {
-			fmt.Println("Debug: Replication acheived")
+			fmt.Println("Debug: Replication on backup servers acheived")
 			s.commitIndex = index
 		} else {
-			fmt.Printf("Debug: Replication failed, replicated only on %d servers", count+1)
+			fmt.Printf("Error: Replication failed, replicated only on %d servers", count+1)
 			//TODO: Return here?
 		}
 	}
@@ -123,34 +124,35 @@ func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.Register
 	usr := User{username: usrname, password: pwd}
 	usr.follows = make(map[string]bool)
 	userdata[usrname] = usr
-	debugPrint("Debug: User added")
+	fmt.Printf("Debug: User %s successfully added \n",usrname)
 	return &pb.RegisterReply{Message: "User succesfully added"}, nil
 }
 
 func (s *server) Login(ctx context.Context, in *pb.Credentials) (*pb.LoginReply, error) {
 	user, ok := userdata[in.Uname]
 	if !ok {
-		debugPrint("No such user")
-		return &pb.LoginReply{Status: false}, errors.New("No such User")
+		debugPrint("Debug: No such user")
+		return &pb.LoginReply{Status: false}, errors.New("no such User")
 	}
 	if in.Pwd == user.password {
 		return &pb.LoginReply{Status: true}, nil
 	} else {
-		return &pb.LoginReply{Status: false}, errors.New("Wrong password")
+		debugPrint("Debug: Wrong password")
+		return &pb.LoginReply{Status: false}, errors.New("wrong password")
 	}
 }
 
 func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddTweetReply, error) {
 
 	// Will be Broadcasted to all the other servers
-	println(in.String())
+	//println(in.String())
 	if in.Broadcast == true {
 
 		//Starting Prepare
 		index, _, ok := s.Start(in.String())
 		if ok == false {
-			debugPrint("Discarding last Add Tweet operation")
-			return &pb.AddTweetReply{Status: false}, errors.New("Backend Replication system down")
+			debugPrint("Error: Discarding last Add Tweet operation")
+			return &pb.AddTweetReply{Status: false}, errors.New("backend replication system down")
 		}
 
 		//Majority servers agreed in the prepare phase
@@ -164,7 +166,8 @@ func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddT
 				//Add Tweet RPC calls to all the backup servers
 				_, err := rpccaller.AddTweet(ctx, in)
 				if err != nil {
-					fmt.Printf("Server %d returned an error %v \n", index, err)
+					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
 					count++
@@ -174,7 +177,7 @@ func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddT
 
 		//Majority of backups successfully performed the operation
 		if count >= len(s.peers)/2 {
-			fmt.Println("Debug: Tweet successfuly added to the Majority servers {Replication achieved}")
+			fmt.Printf("Debug: Tweet '%s' successfuly added to the Majority servers {Replication achieved} \n",in.TweetText)
 			s.commitIndex = index
 
 		} else {
@@ -187,30 +190,30 @@ func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddT
 
 	user, ok := userdata[in.Username]
 	if !ok {
-		debugPrint("No such user")
+		debugPrint("Debug: No such user")
 		return &pb.AddTweetReply{Status: false}, errors.New("No such User")
 	}
 	//Add new tweet and update in the Map
 	newTweet := tweet{text: in.TweetText}
 	user.tweets = append(user.tweets, newTweet)
 	userdata[in.Username] = user
-	debugPrint("Successfully added tweet for user "+in.Username)
+	fmt.Printf("Debug: Successfully added tweet '%s' for %s \n",in.TweetText,in.Username)
 	return &pb.AddTweetReply{Status: true}, nil
 }
 
 func (s *server) OwnTweets(ctx context.Context, in *pb.OwnTweetsRequest) (*pb.OwnTweetsReply, error) {
 	user, ok := userdata[in.Username]
 	if (!ok) {
-		debugPrint("No such user")
-		return nil, errors.New("No such User")
+		debugPrint("Debug: No such user")
+		return nil, errors.New("no such user")
 	}
 	response := pb.OwnTweetsReply{}
 	for _, i := range user.tweets {
 		tweetToAdd := pb.Tweet{Text: i.text}
 		response.TweetList = append(response.TweetList, &tweetToAdd)
 	}
-	debugPrint("your tweets")
-	fmt.Println(response)
+	//debugPrint("Debug: your tweets")
+	//fmt.Println(response)
 	return &response, nil
 }
 
@@ -218,8 +221,8 @@ func (s *server) UserExists(ctx context.Context, in *pb.UserExistsRequest) (*pb.
 	username := in.Username
 	_, ok := userdata[username]
 	if !ok {
-		debugPrint("No such user")
-		return &pb.UserExistsReply{Status: false}, errors.New("No such user exists")
+		debugPrint("Debug: No such user")
+		return &pb.UserExistsReply{Status: false}, errors.New("no such user exists")
 	} else {
 		return &pb.UserExistsReply{Status: true}, nil
 	}
@@ -235,7 +238,7 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 		index, _, ok := s.Start(in.String())
 		if ok == false {
 			debugPrint("Debug: Discarding last Delete operation")
-			return &pb.DeleteReply{DeleteStatus: false}, errors.New("Backend Replication system down")
+			return &pb.DeleteReply{DeleteStatus: false}, errors.New("backend replication system down")
 		}
 
 		//Majority servers agreed in the prepare phase
@@ -249,7 +252,8 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 				//Delete User RPC calls to all the backup servers
 				_, err := rpccaller.DeleteUser(ctx, in)
 				if err != nil {
-					fmt.Printf("Server %d returned an error %v \n", index, err)
+					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
 					count++
@@ -259,7 +263,7 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 
 		//Majority of backups successfully performed the operation
 		if count >= len(s.peers)/2 {
-			fmt.Println("Debug: User Deleted from Majority servers")
+			fmt.Printf("Debug: User %s deleted from Majority servers \n",in.Uname)
 			s.commitIndex = index
 
 			// Master itself performing the operation
@@ -283,7 +287,7 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 
 func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.FollowUserResponse, error) {
 
-	println(in.String())
+	//println(in.String())
 	// Will be Broadcasted to all the other servers
 	if in.Broadcast == true {
 
@@ -305,7 +309,8 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 				//Add Tweet RPC calls to all the backup servers
 				_, err := rpccaller.FollowUser(ctx, in)
 				if err != nil {
-					fmt.Printf("Server %d returned an error %v \n", index, err)
+					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
 					count++
@@ -315,7 +320,7 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 
 		//Majority of backups successfully performed the operation
 		if count >= len(s.peers)/2 {
-			fmt.Println("Debug: Sucessfully followed user on of the Majority servers {Replication achieved}")
+			fmt.Printf("Debug: User %s followed User %s  replicated on Majority servers {Replication achieved} \n",in.SelfUsername,in.ToFollowUsername)
 			s.commitIndex = index
 
 		} else {
@@ -327,7 +332,7 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 
 
 
-	debugPrint("User: " + in.SelfUsername + " has requested to follow: " + in.ToFollowUsername)
+	//debugPrint("User: " + in.SelfUsername + " has requested to follow: " + in.ToFollowUsername)
 	//Getting user from user data map and adding the new user to be followed
 	user, ok := userdata[in.SelfUsername]
 	if !ok {
@@ -337,8 +342,9 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 	if !ok2 {
 		return &pb.FollowUserResponse{FollowStatus: false}, errors.New("Debug: ToFollow user does not exist")
 	}
-	fmt.Println("value of ok2", ok2, in.ToFollowUsername)
+	//fmt.Println("value of ok2", ok2, in.ToFollowUsername)
 	user.follows[in.ToFollowUsername] = true
+	fmt.Printf("Debug: %s follows user %s successfully mapped",in.SelfUsername,in.ToFollowUsername)
 	return &pb.FollowUserResponse{FollowStatus: true}, nil
 
 }
@@ -374,10 +380,10 @@ func (s *server) GetFriendsTweets(ctx context.Context, in *pb.GetFriendsTweetsRe
 			eachFollowedUserData := userdata[eachFollowedUser]
 			userAllTweets := &pb.UsersAllTweets{}
 			userAllTweets.Username = &pb.User{Username: eachFollowedUser}
-			println(eachFollowedUser)
+			//println(eachFollowedUser)
 			//Append all the tweets ap per the User
 			for _, eachUserTweet := range eachFollowedUserData.tweets {
-				println(eachUserTweet.text)
+				//println(eachUserTweet.text)
 				userAllTweets.Tweets = append(userAllTweets.Tweets, &pb.Tweet{Text: eachUserTweet.text})
 			}
 			//Append all of current Followed users data into the response
@@ -427,7 +433,7 @@ func (srv *server) Prepare(ctx context.Context, args *pb.PrepareArgs) (reply *pb
 	}
 
 	if int(args.Index) != srv.opNo+1 || int(args.View) > srv.currentView {
-		fmt.Println("Debug: Server needs to recover")
+		fmt.Println("Debug:~~~~~~~~~~~~~~Server needs to recover~~~~~~~~~~~~~")
 		//log.Fatal("Debug: Server needs to recover")
 		srv.status = RECOVERING
 		PrimaryIndex := GetPrimary(int(args.View), len(srv.peers))
@@ -468,14 +474,15 @@ func (srv *server) Prepare(ctx context.Context, args *pb.PrepareArgs) (reply *pb
 				srv.opNo = len(srv.log) - 1
 				//srv.commitIndex=int(args.PrimaryCommit)
 				reply.Success = true
-				fmt.Println(userdata)
+				//fmt.Println(userdata)			Todo: Discuss if this should be logged
+				fmt.Println("Debug: Recovery Completed")
 				return reply, nil
 			} else {
-				return reply, errors.New("Debug: Error while recovering")
+				return reply, errors.New("Error: Error while recovering")
 
 			}
 		} else {
-			return reply, errors.New("Debug: Error while recovering")
+			return reply, errors.New("Error: Error while recovering")
 		}
 	}
 	//srv.commitIndex=args.PrimaryCommit
@@ -528,10 +535,12 @@ func (srv *server) Start(command string) (index int, view int, ok bool) {
 				if outArgs.Success == true {
 					count = count + 1
 				} else {
-					fmt.Printf("Debug: Prepare rpc to Server %d failed, error is : %s \n", pointer, err)
+					fmt.Printf("Error: Prepare rpc to Server %d failed \n", pointer)
+					//fmt.Printf("error is : %s \n", err)
 				}
 			} else {
-				fmt.Printf("Debug: Prepare rpc to Server %d failed, error is : %s \n", pointer, err)
+				fmt.Printf("Error: Prepare rpc to Server %d failed \n", pointer)
+				//fmt.Printf("error is : %s \n", err)
 			}
 
 		}
@@ -543,16 +552,12 @@ func (srv *server) Start(command string) (index int, view int, ok bool) {
 
 	//Check if majority calls have returned, consider Primary as committed
 	if count >= length/2 {
-		//	srv.log = append(srv.log,command)
-		//srv.commitIndex=srv.opNo
-		////	index=srv.commitIndex
-		//ok=true
 		ok = true
 		index = srv.opNo
 	} else {
 		index = -1
 		ok = false
-		debugPrint("Debug: Back-end Replication Down (Majority of Servers unresponsive)")
+		debugPrint("Fatal: Back-end Replication Down (Majority of Servers unresponsive)")
 	}
 	return index, view, ok
 }
@@ -602,6 +607,8 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 	} else if newView <= srv.currentView {
 		return
 	}
+	fmt.Println("Debug: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	fmt.Printf("Debug:Looks like the primary is down. Trying to become the new primary.. \n")
 	vcArgs := &pb.ViewChangeArgs{
 		View: int32(newView),
 	}
@@ -615,7 +622,7 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 			// fmt.Printf("node-%d (nReplies %d) received reply ok=%v reply=%v\n", srv.me, nReplies, ok, r.reply)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			fmt.Println(val)
+			//fmt.Println(val)
 			reply, err := srv.peerRPC[val].ViewChange(ctx,vcArgs)
 			if err==nil && reply.Success == true {
 				vcReplyChan <- reply
@@ -624,7 +631,7 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 			}
 		}(i)
 	}
-	fmt.Println("Debug: starting view change")
+
 	// wait to receive ViewChange replies
 	// if view change succeeds, send StartView RPC
 	go func() {
@@ -658,6 +665,7 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 			}(i)
 		}
 	}()
+	fmt.Printf("Debug: I am the new primary. Operations can now be resumed \n")
 	return &pb.PromptViewChangeReply{Success:true}, nil
 }
 
@@ -691,12 +699,14 @@ func (srv *server) determineNewViewLog(successReplies []*pb.ViewChangeReply) (ok
 
 func (srv *server) StartView(ctx context.Context, args *pb.StartViewArgs) (reply *pb.StartViewReply, err error) {
 	if(srv.currentView>int(args.View)){
-		return &pb.StartViewReply{}, errors.New("Debug: Start View Failed")
+		return &pb.StartViewReply{}, errors.New("start view failed")
 	}
+	fmt.Printf("Debug: Starting new view \n")
 	srv.currentView=int(args.View)
 	//srv.log=args.Log
 	srv.status=NORMAL
 	//srv.opNo=len(srv.log)-1
+	fmt.Printf("Debug: We have a new primary Server %d \n",GetPrimary(int(args.View),len(srv.peers)))
 	return &pb.StartViewReply{}, nil
 
 }
@@ -708,6 +718,8 @@ func (srv *server) ViewChange(ctx context.Context, args *pb.ViewChangeArgs) (rep
 		reply.Success=false
 		return reply, errors.New("Debug: Server View greater than ViewChange Request")
 	}
+	fmt.Printf("Debug: We need a new Primary, Server %d is trying to become the primary \n",GetPrimary(int(args.View),len(srv.peers)));
+	fmt.Println("Debug: starting view change")
 	reply.LastNormalView=int32(srv.currentView)
 	reply.Log=srv.log
 	reply.Success=true
@@ -760,7 +772,8 @@ func main() {
 	for index, port := range srv.peers {
 		conn, err := grpc.Dial(port, grpc.WithInsecure())
 		if err != nil {
-			log.Fatalf("did not connect: %v to port %s", err, port)
+			fmt.Printf("did not connect to port %s \n",port)
+			//log.Fatal("Error: %s",err)
 		}
 		defer conn.Close()
 		//c := pb.NewGreeterClient(conn)
@@ -802,7 +815,7 @@ func main() {
 			defer cancel()
 			reply, err := rpccaller.WhoIsPrimary(ctx, &pb.WhoisPrimaryRequest{})
 			if err != nil {
-				fmt.Printf("Server %d returned an error %v \n", index, err)
+				fmt.Printf("Could not connect to Server %d \n", index)
 			} else {
 				fmt.Printf("Server %d replied that the primary is %d \n", index, reply.Index)
 			}
