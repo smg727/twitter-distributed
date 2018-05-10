@@ -20,9 +20,6 @@ const (
 	NORMAL = iota
 	VIEWCHANGE
 	RECOVERING
-	//port = ":50051"
-	//port = ":50052"
-	//port = ":50053"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -97,7 +94,7 @@ func (s *server) Register(ctx context.Context, in *pb.Credentials) (*pb.Register
 				defer cancel()
 				_, err := rpccaller.Register(ctx, in)
 				if err != nil {
-					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					fmt.Printf("Debug: Server %d was unreachable \n", i)
 					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					count++
@@ -166,7 +163,7 @@ func (s *server) AddTweet(ctx context.Context, in *pb.AddTweetRequest) (*pb.AddT
 				//Add Tweet RPC calls to all the backup servers
 				_, err := rpccaller.AddTweet(ctx, in)
 				if err != nil {
-					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					fmt.Printf("Debug: Server %d was unreachable \n", i)
 					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
@@ -252,7 +249,7 @@ func (s *server) DeleteUser(ctx context.Context, in *pb.Credentials) (*pb.Delete
 				//Delete User RPC calls to all the backup servers
 				_, err := rpccaller.DeleteUser(ctx, in)
 				if err != nil {
-					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					fmt.Printf("Debug: Server %d was unreachable \n", i)
 					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
@@ -309,7 +306,7 @@ func (s *server) FollowUser(ctx context.Context, in *pb.FollowUserRequest) (*pb.
 				//Add Tweet RPC calls to all the backup servers
 				_, err := rpccaller.FollowUser(ctx, in)
 				if err != nil {
-					fmt.Printf("Debug: Server %d was unreachable \n", index)
+					fmt.Printf("Debug: Server %d was unreachable \n", i)
 					//fmt.Printf("Debug: Error was %s \n",err)
 				} else {
 					//Counting the number of successful commits
@@ -608,7 +605,7 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 		return
 	}
 	fmt.Println("Debug: ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	fmt.Printf("Debug:Looks like the primary is down. Trying to become the new primary.. \n")
+	fmt.Printf("Debug: Looks like the primary is down. Trying to become the new primary.. \n")
 	vcArgs := &pb.ViewChangeArgs{
 		View: int32(newView),
 	}
@@ -665,7 +662,6 @@ func (srv *server) PromptViewChange(ctx context.Context, args *pb.PromptViewChan
 			}(i)
 		}
 	}()
-	fmt.Printf("Debug: I am the new primary. Operations can now be resumed \n")
 	return &pb.PromptViewChangeReply{Success:true}, nil
 }
 
@@ -719,7 +715,7 @@ func (srv *server) ViewChange(ctx context.Context, args *pb.ViewChangeArgs) (rep
 		return reply, errors.New("Debug: Server View greater than ViewChange Request")
 	}
 	fmt.Printf("Debug: We need a new Primary, Server %d is trying to become the primary \n",GetPrimary(int(args.View),len(srv.peers)));
-	fmt.Println("Debug: starting view change")
+	fmt.Println("Debug: Starting view change")
 	reply.LastNormalView=int32(srv.currentView)
 	reply.Log=srv.log
 	reply.Success=true
