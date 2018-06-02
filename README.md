@@ -8,10 +8,10 @@
 | Geetesh Nikhde | gpn218 |
 
 ### Architecture and function overview:
-
+![alt text](images/Distributed_1.jpg)
 
 ### Failure or View-change scenario:
-
+![alt text](images/Distributed_2.jpg)
 
 ## Setup Steps:
 1. Clone repoistory to a folder with `GOPATH` set
