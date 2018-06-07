@@ -1,24 +1,33 @@
-# twitter-distributed
+# Twitter Distributed
 
-Team Members:
-Sangram Ghuge - smg727
-Geetesh Nikhde - gpn218
+### Team Members:
 
-Setup Steps:
-1. Clone repoistory to a folder with GoPath set
+| **Name** | **NYU net_id**|
+| ----- | ------------|
+| Sangram Ghuge | smg727 |
+| Geetesh Nikhde | gpn218 |
 
-Back-End Server:
-1. go to BEServer folder and run the back-end server using: go run BEsrv.go
-2. TO run the back-end server, we need GRPC set up on the machine
-3. Ensure the following grpc libraries are present at the path GoPATH/src/ :
-    "golang.org/x/net/context"
-    "google.golang.org/grpc"
-    "google.golang.org/grpc/reflection"
+### Architecture and function overview:
+![alt text](images/Distributed_1.jpg)
+
+### Failure or View-change scenario:
+![alt text](images/Distributed_2.jpg)
+
+## Setup Steps:
+1. Clone repoistory to a folder with `GOPATH` set
+
+### Back-End Server:
+1. Go to BEServer folder and run the back-end server using: `go run BEsrv.go`
+2. To run the back-end server, we need GRPC set up on the machine
+3. Ensure the following grpc libraries are present at the path `GOPATH/src/` :
+    * "golang.org/x/net/context"
+    * "google.golang.org/grpc"
+    * "google.golang.org/grpc/reflection"
 4. The above libraries can be obtained as shown here: https://grpc.io/docs/quickstart/go.html
 
 
-Front-End Server:
-1. The following files need to be built to run: Data.go & srv.go
+### Front-End Server:
+1. The following files need to be built to run: `Data.go and srv.go`
 2. Have the back-end server running before the front-end server starts
 3. Go to - http://localhost:9090/home If you are not logged in, you will be redirected to the login page.
 
